@@ -169,7 +169,7 @@ module.exports.getShopBarbers = async (shopId) => {
 
 module.exports.editBarberProfile = async (barberId,data) => {
     try {
-        return await BarberModel.findByIdAndUpdate(barberId, data, {new: true});
+        return await BarberModel.findByIdAndUpdate(barberId, data, {$set: data}, {new: true});
     } catch (error) {
         console.error(error)
     }
@@ -243,6 +243,32 @@ module.exports.updateBankDetailsFunction = async (shoperId,data) => {
     try {
         const Bank = await BankDetailsModel.findOneAndUpdate({ShoperId: shoperId}, data,{new:true})
         return Bank
+    } catch (error) {
+        console.error(error)
+    }
+}
+
+module.exports.editServiceFunction = async (serviceId,data) => {
+    try {
+        const editedService = await  ServiceModel.findByIdAndUpdate(serviceId, {$set: data},{new:true})
+        console.log(editedService,"edtited service")
+        return editedService
+    } catch (error) {
+        console.error(error)
+    }
+}
+
+module.exports.deleteServiceFunction = async (serviceId) => {
+    try {
+        console.log("service Id:",serviceId)
+       const service = await ServiceModel.findByIdAndDelete(serviceId)
+       if (service) {
+        console.log("Deleted service:", service)
+        return service
+    } else {
+        console.log("No service found with ID:", serviceId)
+        return null
+    }
     } catch (error) {
         console.error(error)
     }

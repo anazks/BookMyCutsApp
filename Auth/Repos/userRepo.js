@@ -2,6 +2,7 @@ const UserModel = require("../Model/UserModel")
 const shoperModel = require('../Model/ShoperModel')
 const asyncHandler = require("express-async-handler");
 const { userLogin } = require("../Controllers/AuthController");
+const otpModel = require("../Model/OtpModel");
 
 module.exports.createUser = asyncHandler(async (data)=>{
     try {
@@ -34,6 +35,6 @@ module.exports.getUserProfile = asyncHandler(async (data) => {
        return user;
     } catch (error) {
         return res.status(500).json({ message: 'Error fetching profile' });
-        
     }
-})
+}) 
+

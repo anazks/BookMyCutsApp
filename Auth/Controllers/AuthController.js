@@ -1,5 +1,5 @@
 const asyncHandler = require("express-async-handler");
-const { registerUserUseCase,loginuserUsecause,registerShoperUseCase,loginShoperUsecause } = require("../UseCauses/userUseCause");
+const { registerUserUseCase,loginuserUsecause,registerShoperUseCase,loginShoperUsecause,createAndSendOtp,verifyOtpFunction } = require("../UseCauses/userUseCause");
 const decorder = require("../../TokenDecoder/Decoder");
 const {getUserProfile} = require("../Repos/userRepo")
 const bcrypt = require('bcryptjs')
@@ -73,4 +73,59 @@ const getProfile = asyncHandler(async (req, res) => {
   }
 }
 );
-module.exports = {userRegistration,userLogin,ShopRegister,login,getUsers,getProfile}
+
+const otpRequest = async  (req,res) => {
+    try {
+        const email = req.body.email
+        let otp = await createAndSendOtp(email)
+        console.log(otp,"otp")
+        if(otp){
+            res.status(200).json({
+                success:true,
+                message:"otp is send to email"
+            })
+        }else{
+            res.status(404).json({
+                success:false,
+                message:"faild to generate otp"
+            })
+        }
+    } catch (error) {
+        return res.status(401).json({ message: 'internal server error' })
+    }
+}
+
+const verifyOtp = async (req, res) => {
+  try {
+    const { email } = req.body;
+    let { otp } = req.body;
+
+    if (!email) {
+      return res.status(400).json({ success: false, message: "Email is required" });
+    }
+
+    if (!otp || isNaN(otp)) {
+      return res.status(400).json({ success: false, message: "OTP is required and must be a number" });
+    }
+
+    otp = Number(otp); // safe now
+
+    const result = await verifyOtpFunction(otp, email);
+
+    if (result.success) {
+      return res.status(200).json({
+        success: true,
+        message: "OTP verified successfully",
+        token: result.token
+      });
+    }
+
+    return res.status(400).json({ success: false, message: result.message });
+  } catch (error) {
+    console.error("Verify OTP Error:", error);
+    return res.status(500).json({ success: false, message: "Internal server error" });
+  }
+};
+
+
+module.exports = {userRegistration,userLogin,ShopRegister,login,getUsers,getProfile,otpRequest,verifyOtp}

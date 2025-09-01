@@ -134,7 +134,9 @@ const getMybooking = async (req, res) => {
 
 const findDashboardIncome =  async (req, res) => {
     try {
-        const shopId = req.params.id
+         let token = req.headers['authorization']?.split(' ')[1]; // Bearer <token>
+        let decodedValue = await Decoder(token);  
+        const shopId = decodedValue.id
         const dashboardIncome = await findDashboardIncomeFuncion(shopId)
         if(dashboardIncome){
             return res.status(200).json({ 

@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const {viewMyshop,viewSingleShopBarbers,viewSingleShopService,myprofile,viewAllBookingOfShops,myShopProfile,AddShop,ViewAllShop,addService,ViewAllServices,addBarber,ViewAllBarbers,viewSigleShop,viewMyService,viewMyBarbers,updateBarber, deleteBarber,makePremium, getAllPremiumShops, saveBankDetails, viewbankDetails, deleteBankDetails, upadateBankdetails} = require('../Controller/ShopController')
+const {viewMyshop,viewSingleShopBarbers,viewSingleShopService,myprofile,viewAllBookingOfShops,myShopProfile,AddShop,ViewAllShop,addService,ViewAllServices,addBarber,ViewAllBarbers,viewSigleShop,viewMyService,viewMyBarbers,updateBarber, deleteBarber,makePremium, getAllPremiumShops, saveBankDetails, viewbankDetails, deleteBankDetails, upadateBankdetails,editService, deleteService} = require('../Controller/ShopController')
 
 router.route('/addShop').post(AddShop)
 router.route('/getMyProfile').get(myprofile)
@@ -12,11 +12,13 @@ router.route('/viewMyBooking').get(viewAllBookingOfShops) // Assuming this is a 
 // router.route('/viewMyShop').get(myShopProfile)
 router.route('/addService').post(addService)
 router.route('/viewMyService').get(viewMyService)
+router.route('/ViewAllServices').get(ViewAllServices)
+router.route('/viewSingleShopService/:id').get(viewSingleShopService) // Assuming this is a function
+router.route('/editService/:id').put(editService)
+router.route('/deleteService/:id').delete(deleteService)
 
 router.route('/viewSingleShopBarbers/:id').get(viewSingleShopBarbers) // Assuming this is a function
-router.route('/viewSingleShopService/:id').get(viewSingleShopService) // Assuming this is a function
 
-router.route('/ViewAllServices').get(ViewAllServices)
 
 router.route('/addBarber').post(addBarber)
 router.route('/ViewAllBarbers').get(ViewAllBarbers)

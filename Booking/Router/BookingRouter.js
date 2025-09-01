@@ -19,6 +19,6 @@ router.route('/BookNow').post(AddBooking) // normal curd operation just add data
 router.route('/create-order').post(verifyToken,createOrder)
 router.route('/verifyPayment').post(verifyToken,verifyPayment)
 
-router.route('/dashboardIncome/:id').get(findDashboardIncome)
+router.route('/dashboardIncome').get(findDashboardIncome)
 
 module.exports = router;

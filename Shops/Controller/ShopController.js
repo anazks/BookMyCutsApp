@@ -24,7 +24,9 @@ const {
     makePremiumFunction,
     getAllPremiumShopsFunction,
     viewbankDetailsFunction,
-    deleteBankdetailsFunction
+    deleteBankdetailsFunction,
+    editServiceFunction,
+    deleteServiceFunction
 } = require('../Repo/ShopRepo');
 const Decoder = require("../../TokenDecoder/Decoder");
 const { json } = require("express");
@@ -312,6 +314,7 @@ const viewMyService = asyncHandler(async (req, res) => {
 
 const viewMyBarbers = asyncHandler(async (req, res) => {
     const token = req.headers['authorization']?.split(' ')[1];
+    console.log(token,"token")
     if (!token) {
         return res.status(401).json({
             success: false,
@@ -324,7 +327,7 @@ const viewMyBarbers = asyncHandler(async (req, res) => {
         const myBarbers = await getMyBarbers(tokenData.id);
         
         if (!myBarbers || myBarbers.length === 0) {
-            return res.status(404).json({
+            return res.status(200).json({
                 success: false,
                 message: "No barbers found for this shop"
             });
@@ -506,6 +509,7 @@ const updateBarber = async (req,res) => {
         const barberId = req.params.id
         let data = req.body
         const barber = await editBarberProfile(barberId,data)
+        console.log("edited document:",barber)
         if(!barber || barber.lenght === 0){
              return res.status(404).json({
                 success: false,
@@ -527,7 +531,7 @@ const updateBarber = async (req,res) => {
     }
 }
 
-const deleteBarber =async (req, res) => {
+const deleteBarber = async (req, res) => {
      try {
          const barberId = req.params.id
          const barber = await deleteBarberFunction(barberId)
@@ -698,7 +702,58 @@ const upadateBankdetails = async (req,res) => {
         })
     }
 }
+
+const editService = async (req,res) => {
+    try {
+      const serviceId = req.params.id 
+      console.log("serviceId",serviceId) 
+      const data = req.body
+      let service = await editServiceFunction(serviceId,data)
+      if(!service || service.length === 0 ){
+        res.status(404).json({
+            success:false,
+            message:"failed to updata service",
+        })
+      }else{
+        res.status(200).json({
+            success:true,
+            message:"successfully edited service",
+            service
+        })
+      }
+    } catch (error) {
+        res.status(500).json({
+            success:false,
+            message:"internal server error"
+        })
+        console.error(error)
+    }
+}
+
+ const deleteService = async (req,res) => {
+   try {
+    const serviceId = req.params.id
+    let service = deleteServiceFunction(serviceId)
+    if(!service){
+        res.status(404).json({
+            success:false,
+            message:"failed deleted  service",
+            
+        })
+    }
+    res.status(200).json({
+        success:true,
+        message:"successfully deleted sevice",
+        service
+    })
+   } catch (error) {
+        console.log(error)
+   }
+ }
+
 module.exports = {
+    deleteService,
+    editService,
     upadateBankdetails,
     deleteBankDetails,
     viewbankDetails,
