@@ -3,9 +3,14 @@ const bcrypt = require('bcryptjs')
 const jwt = require('jsonwebtoken');
 const nodemailer = require('nodemailer');
 const asyncHandler = require("express-async-handler");
-const otpModel = require('../Model/OtpModel')
+const twilio = require("twilio");
+const otpModel = require('../Model/OtpModel');
+const ShoperModel = require("../Model/ShoperModel");
 
 const secretKey =  process.env.secretKey;
+const accountSid = "AC3c6e80e571c483870c9c4ba324f7e781";
+const authToken = "086766ccde4cf06f87ec898ed9df7431";
+const client = twilio(accountSid, authToken);
 
 
 module.exports.registerUserUseCase = async (data)=>{
@@ -83,69 +88,42 @@ module.exports.loginShoperUsecause = asyncHandler(async(data)=>{
     return {token,userData}
 })
 
-const sendOtpEmail = async (toEmail, otp) => {
+module.exports.sendOtpmobileNo = async (mobileNo) => {
   try {
-    // Create transporter
-    const transporter = nodemailer.createTransport({
-      service: 'gmail',
-      auth: {
-        user: 'govindjayakumar858@gmail.com', // your Gmail
-        pass: 'saku lgie gqou ofmt'     // use App Password if 2FA enabled
-      }
+    const userIsRegistered =  await ShoperModel.exists({mobileNo})
+    if(!userIsRegistered){
+        return "mobile number is not registered"
+    }
+    const otp = Math.floor(1000 + Math.random() * 9000); // 4-digit OTP
+    await otpModel.create({ mobileNo, otp });
+    const formattedNumber = mobileNo.startsWith("+") ? mobileNo : `+91${mobileNo}`;
+
+
+      await client.messages.create({
+      body: `Your OTP is ${otp}`,
+      from: "18573746399",
+      to: formattedNumber
     });
-
-    // Email options
-    const mailOptions = {
-      from: 'govindjayakumar858@gmail.com',
-      to: toEmail,
-      subject: 'Your OTP Code',
-      text: `Your OTP code is ${otp}. It will expire in 5 minutes.`
-    };
-
-    // Send email
-    const info = await transporter.sendMail(mailOptions);
-    console.log('Email sent:', info.response);
-
+    return otp
   } catch (error) {
     console.error('Error sending OTP email:', error);
     throw error;
   }
 };
 
-module.exports.createAndSendOtp = async (email) => {
+module.exports.verifyOtpFunction = async (otp, mobileNo) => {
   try {
-    const otp = Math.floor(1000 + Math.random() * 9000);
-
-    // Normalize email
-    const emailNormalized = email.trim().toLowerCase();
-
-    // Save OTP in MongoDB
-    await otpModel.create({ email: emailNormalized, otp, createdAt: new Date() });
-
-    // Send OTP via email
-    await sendOtpEmail(emailNormalized, otp);
-
-    return otp;
-
-  } catch (error) {
-    console.error('Error creating or sending OTP:', error);
-    throw error;
-  }
-};
-
-module.exports.verifyOtpFunction = async (otp, email) => {
-  try {
-    const emailNormalized = email.trim().toLowerCase();
+    // const emailNormalized = email.trim().toLowerCase();
     otp = Number(otp);
 
-    const otpData = await otpModel.findOne({ email: emailNormalized, otp });
+    const otpData = await otpModel.findOne({ mobileNo, otp });
     console.log("otpData from DB:", otpData);
 
     if (!otpData) {
       return { success: false, message: "Invalid OTP" };
     }
 
-    const token = jwt.sign({ email: emailNormalized }, process.env.secretkey, { expiresIn: "1h" });
+    const token = jwt.sign({ mobileNo }, process.env.secretkey, { expiresIn: "1h" });
 
     return { success: true, token };
   } catch (error) {

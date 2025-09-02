@@ -1,7 +1,7 @@
 const mongoose = require('mongoose')
 
 const OtpSchema = new mongoose.Schema({
-    email:{
+    mobileNo:{
         type:String,
         required:true
     },

@@ -1,5 +1,5 @@
 const asyncHandler = require("express-async-handler");
-const { registerUserUseCase,loginuserUsecause,registerShoperUseCase,loginShoperUsecause,createAndSendOtp,verifyOtpFunction } = require("../UseCauses/userUseCause");
+const { registerUserUseCase,loginuserUsecause,registerShoperUseCase,loginShoperUsecause,sendOtpmobileNo,verifyOtpFunction } = require("../UseCauses/userUseCause");
 const decorder = require("../../TokenDecoder/Decoder");
 const {getUserProfile} = require("../Repos/userRepo")
 const bcrypt = require('bcryptjs')
@@ -76,8 +76,8 @@ const getProfile = asyncHandler(async (req, res) => {
 
 const otpRequest = async  (req,res) => {
     try {
-        const email = req.body.email
-        let otp = await createAndSendOtp(email)
+        const mobileNo = req.body.mobileNo
+        let otp = await sendOtpmobileNo(mobileNo)
         console.log(otp,"otp")
         if(otp){
             res.status(200).json({
@@ -97,10 +97,10 @@ const otpRequest = async  (req,res) => {
 
 const verifyOtp = async (req, res) => {
   try {
-    const { email } = req.body;
+    const { mobileNo } = req.body;
     let { otp } = req.body;
 
-    if (!email) {
+    if (!mobileNo) {
       return res.status(400).json({ success: false, message: "Email is required" });
     }
 
@@ -110,7 +110,7 @@ const verifyOtp = async (req, res) => {
 
     otp = Number(otp); // safe now
 
-    const result = await verifyOtpFunction(otp, email);
+    const result = await verifyOtpFunction(otp, mobileNo);
 
     if (result.success) {
       return res.status(200).json({
