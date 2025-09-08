@@ -11,7 +11,7 @@ const Decoder = async (token) => {
         });
         return decoded;
     } catch (err) {
-        throw new Error('Invalid token');
+         throw new Error("error from decoded",err.message); 
     }
 };
 

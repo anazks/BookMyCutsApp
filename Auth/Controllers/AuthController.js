@@ -57,6 +57,7 @@ const getUsers = asyncHandler(async(req,res)=>{
 
 const getProfile = asyncHandler(async (req, res) => {
     let token = req.headers['authorization']?.split(' ')[1]; // Get token from the Authorization header
+    console.log("token:",token)
     if (!token) {
         return res.status(401).json({ message: 'No token provided' });
     } 
@@ -69,6 +70,7 @@ const getProfile = asyncHandler(async (req, res) => {
         message: "User profile fetched successfully",
         user: userData})
   } catch (error) {
+    console.error("Token verification failed:", error.message);
     return res.status(401).json({ message: 'Invalid token' });
   }
 }
@@ -76,8 +78,10 @@ const getProfile = asyncHandler(async (req, res) => {
 
 const otpRequest = async  (req,res) => {
     try {
+        console.log("request of otp login:",req.body)
         const mobileNo = req.body.mobileNo
-        let otp = await sendOtpmobileNo(mobileNo)
+        const role = req.body.role
+        let otp = await sendOtpmobileNo(mobileNo,role)
         console.log(otp,"otp")
         if(otp){
             res.status(200).json({
@@ -97,8 +101,7 @@ const otpRequest = async  (req,res) => {
 
 const verifyOtp = async (req, res) => {
   try {
-    const { mobileNo } = req.body;
-    let { otp } = req.body;
+    let { mobileNo,otp,role} = req.body
 
     if (!mobileNo) {
       return res.status(400).json({ success: false, message: "Email is required" });
@@ -110,7 +113,7 @@ const verifyOtp = async (req, res) => {
 
     otp = Number(otp); // safe now
 
-    const result = await verifyOtpFunction(otp, mobileNo);
+    const result = await verifyOtpFunction(otp, mobileNo,role);
 
     if (result.success) {
       return res.status(200).json({

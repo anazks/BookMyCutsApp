@@ -183,6 +183,7 @@ const ViewAllServices = asyncHandler(async (req, res) => {
 
 const addBarber = asyncHandler(async (req, res) => {
     const data = req.body;
+    console.log("addBarber requesting data:",data)
     if (!data) {
         return res.status(400).json({
             success: false,
