@@ -15,6 +15,7 @@ const SlotRouter = require('./SlotManagement/SlotRouter/SlotRouter')
 const BookingRouter = require('./Booking/Router/BookingRouter')
 const setupSwagger = require('./swaggerDocs/swaggerConfig');
 const checkExpiredPremium = require('./Shops/ShopScheduler/Scheduler');
+require('./Cloudinary/CloudinaryConfig')
 
 // Define a route for the root URL
 connectToDatabase();

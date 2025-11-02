@@ -273,3 +273,35 @@ module.exports.deleteServiceFunction = async (serviceId) => {
         console.error(error)
     }
 }
+
+module.exports.findNearbyShopsFunction = async (lng, lat, radius) => {
+    try {
+        const shops = await ShopModel.aggregate([
+            {
+                $geoNear: {
+                    near: {
+                        type: "Point",
+                        coordinates: [parseFloat(lng), parseFloat(lat)]
+                    },
+                    distanceField: "distance",
+                    spherical: true,
+                    maxDistance: radius  // ✅ Use the passed radius, not hardcoded 5000
+                }
+            },
+            { $limit: 50 } 
+        ]);
+        return shops;
+    } catch (error) {
+        console.error("Error in findNearbyShopsFunction:", error);
+        throw error; // Re-throw so calling function can handle
+    }
+}
+
+module.exports.deleteShopFuntion = async (shopId) => {
+    try {
+        const shop = await ShopModel.findByIdAndDelete(shopId)
+        return  shop
+    } catch (error) {
+        console.error(error)
+    }
+}

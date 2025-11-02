@@ -38,3 +38,12 @@ module.exports.getUserProfile = asyncHandler(async (data) => {
     }
 }) 
 
+module.exports.deleteUserFunction = async (userId) => {
+    try {
+        const user = UserModel.findByIdAndDelete(userId)
+        return user
+    } catch (error) {
+        console.error(error)
+    }
+}
+

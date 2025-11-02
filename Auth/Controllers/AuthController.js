@@ -1,7 +1,7 @@
 const asyncHandler = require("express-async-handler");
 const { registerUserUseCase,loginuserUsecause,registerShoperUseCase,loginShoperUsecause,sendOtpmobileNo,verifyOtpFunction } = require("../UseCauses/userUseCause");
 const decorder = require("../../TokenDecoder/Decoder");
-const {getUserProfile} = require("../Repos/userRepo")
+const {getUserProfile,deleteUserFunction} = require("../Repos/userRepo")
 const bcrypt = require('bcryptjs')
 const jwt = require('jsonwebtoken');
 
@@ -78,10 +78,8 @@ const getProfile = asyncHandler(async (req, res) => {
 
 const otpRequest = async  (req,res) => {
     try {
-        console.log("request of otp login:",req.body)
-        const mobileNo = req.body.mobileNo
-        const role = req.body.role
-        let otp = await sendOtpmobileNo(mobileNo,role)
+        const data = req.body
+        let otp = await sendOtpmobileNo(data)
         console.log(otp,"otp")
         if(otp){
             res.status(200).json({
@@ -130,5 +128,28 @@ const verifyOtp = async (req, res) => {
   }
 };
 
+const deleteUser = async (req,res) => {
+  try {
+    const userId = req.params.id
+    const deleteUser = await deleteUserFunction(userId)
+    if(deleteUser){
+      res.status(200).json({
+        success:true,
+        message:'successfully deleted the user'
+      })
+    }
+    res.status(400).json({
+      success:false,
+      message:"failed to delete user"
+    })
+  } catch (error) {
+    console.error(error)
+    res.status(500).json({
+      success:false,
+      message:'internal server error'
+    })
+  }
+}
 
-module.exports = {userRegistration,userLogin,ShopRegister,login,getUsers,getProfile,otpRequest,verifyOtp}
+
+module.exports = {deleteUser,userRegistration,userLogin,ShopRegister,login,getUsers,getProfile,otpRequest,verifyOtp}

@@ -89,7 +89,8 @@ module.exports.loginShoperUsecause = asyncHandler(async(data)=>{
     return {token,userData}
 })
 
-module.exports.sendOtpmobileNo = async (mobileNo, role) => {
+module.exports.sendOtpmobileNo = async (data) => {
+  let {mobileNo,role} = data
   try {
     let model;
     if (role === "user") {
@@ -103,9 +104,10 @@ module.exports.sendOtpmobileNo = async (mobileNo, role) => {
 
     const exists = await model.exists({ mobileNo });
     if (!exists) {
-      return "mobile number is not registered";
+      user = await model.create(data)
+      console.log(user,"newly registered user")
     }
-
+ 
     const otp = Math.floor(1000 + Math.random() * 9000); // 4-digit OTP
     await otpModel.create({ mobileNo, otp });
     const formattedNumber = mobileNo.startsWith("+") ? mobileNo : `+91${mobileNo}`;
@@ -145,7 +147,7 @@ module.exports.verifyOtpFunction = async (otp, mobileNo,role) => {
       return "Invalid role specified";
     }
     const user = await model.findOne({mobileNo})
-    console.log(user,"user fetching using mobile")
+    console.log(user,"user fetching using mobile---------")
     
     
 

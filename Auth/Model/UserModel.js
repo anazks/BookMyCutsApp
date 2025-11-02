@@ -19,15 +19,12 @@ const UserSchema = new Schema({
     },
     city:{
         type : String,
-        required : true
     },
     password:{
         type : String,
-        required : true
     },
     email:{
         type : String,
-        required : true,
         maxlenght : 100
     },
     role:{

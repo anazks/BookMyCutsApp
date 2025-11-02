@@ -26,10 +26,14 @@ const {
     viewbankDetailsFunction,
     deleteBankdetailsFunction,
     editServiceFunction,
-    deleteServiceFunction
+    deleteServiceFunction,
+    deleteShopFuntion,
+    findNearbyShopsFunction
 } = require('../Repo/ShopRepo');
 const Decoder = require("../../TokenDecoder/Decoder");
 const { json } = require("express");
+const { convertToGeocode,findNearestShops } = require('../UseCase/useCaseShop');
+const { TrunkContextImpl } = require("twilio/lib/rest/routes/v2/trunk");
 
 const AddShop = asyncHandler(async (req, res) => {
     const data = req.body;
@@ -61,14 +65,22 @@ const AddShop = asyncHandler(async (req, res) => {
 
         console.log("Data received for adding shop:", data);
 
-        // Save shop
+        let geocode = await convertToGeocode(data)
+        console.log("geocode:",geocode)
+        if(geocode.success){
+           data.ExactLocationCoord = {
+            type:"Point",
+            coordinates:[geocode.longitude,geocode.latitude]
+           }
+        }
         const shopAdded = await addShop(data);
         console.log("Shop added:", shopAdded);  
         if (shopAdded) {
             return res.status(201).json({
                 success: true,
                 message: "Shop added successfully",
-                data: shopAdded
+                data: shopAdded,
+                geocode
             });
         } else {
             return res.status(500).json({
@@ -752,7 +764,60 @@ const editService = async (req,res) => {
    }
  }
 
+const findNearByShops = async (req,res) => {
+    try {
+        const {lng,lat} = req.query
+        const shops = await findNearestShops(lng,lat)
+        if(shops.length > 0){
+          return  res.status(200).json({
+                success:true,
+                message:"successfully fetch nearby shops",
+                shops
+            })
+        }
+         return  res.status(404).json({
+            success:false,
+            message:"failed to fetch nearby shops"
+        })
+    } catch (error) {
+        console.error("Error in findNearByShops",error)
+        return res.status(500).json({
+            success:false,
+            message:"internal server error"
+        })
+    }
+}
+
+const deleteShop = async (req,res) => {
+    try {
+        const shopId = req.params.id
+        const shop = await deleteShopFuntion(shopId)
+        if(shop){
+          return  res.status(200).json({
+                success:true,
+                message:"successfully deleted the shop",
+
+            })
+        }
+          return  res.status(404).json({
+            success:false,
+            message:"failed to delete shop",
+
+        })
+    } catch (error) {
+        console.error(error)
+      return  res.status(500).json({
+            success:false,
+            message:"internal server erroo"
+        })
+    }
+}
+
+
+
 module.exports = {
+    deleteShop,
+    findNearByShops,
     deleteService,
     editService,
     upadateBankdetails,

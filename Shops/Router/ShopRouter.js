@@ -1,13 +1,19 @@
 const express = require('express');
 const router = express.Router();
-const {viewMyshop,viewSingleShopBarbers,viewSingleShopService,myprofile,viewAllBookingOfShops,myShopProfile,AddShop,ViewAllShop,addService,ViewAllServices,addBarber,ViewAllBarbers,viewSigleShop,viewMyService,viewMyBarbers,updateBarber, deleteBarber,makePremium, getAllPremiumShops, saveBankDetails, viewbankDetails, deleteBankDetails, upadateBankdetails,editService, deleteService} = require('../Controller/ShopController')
+const multer = require('multer')
+const {viewMyshop,viewSingleShopBarbers,viewSingleShopService,myprofile,viewAllBookingOfShops,myShopProfile,AddShop,ViewAllShop,addService,ViewAllServices,addBarber,ViewAllBarbers,viewSigleShop,viewMyService,viewMyBarbers,updateBarber, deleteBarber,makePremium, getAllPremiumShops, saveBankDetails, viewbankDetails, deleteBankDetails, upadateBankdetails,editService, deleteService,findNearByShops,deleteShop} = require('../Controller/ShopController')
+const {uploadMedia}  = require('../../Shops/CloudStorageCurds/CloudCurds')
+const upload = require('../../Cloudinary/MulterConfig')
 
 router.route('/addShop').post(AddShop)
 router.route('/getMyProfile').get(myprofile)
 router.route('/ViewAllShop').get(ViewAllShop)
 router.route('/viewSigleShop').post(viewSigleShop)
 router.route('/viewMyshop').get(viewMyshop)
-router.route('/viewMyBooking').get(viewAllBookingOfShops) // Assuming this is a function
+router.route('/viewMyBooking').get(viewAllBookingOfShops)
+router.route('/findNearByShops').get(findNearByShops)
+router.route('/deleteShop/:id').delete(deleteShop)
+// Assuming this is a function
 // router.route('/viewMyShop').get(viewMyShop) // Assuming this is a function
 // router.route('/viewMyShop').get(myShopProfile)
 router.route('/addService').post(addService)
@@ -17,8 +23,9 @@ router.route('/viewSingleShopService/:id').get(viewSingleShopService) // Assumin
 router.route('/editService/:id').put(editService)
 router.route('/deleteService/:id').delete(deleteService)
 
-router.route('/viewSingleShopBarbers/:id').get(viewSingleShopBarbers) // Assuming this is a function
+router.route('/viewSingleShopBarbers/').get(viewSingleShopBarbers) // Assuming this is a function
 
+router.route('/uploadMedia/:id').post(upload.single('file'), uploadMedia);  // Now defined
 
 router.route('/addBarber').post(addBarber)
 router.route('/ViewAllBarbers').get(ViewAllBarbers)
