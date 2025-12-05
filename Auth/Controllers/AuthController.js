@@ -56,25 +56,32 @@ const getUsers = asyncHandler(async(req,res)=>{
 })
 
 const getProfile = asyncHandler(async (req, res) => {
-    let token = req.headers['authorization']?.split(' ')[1]; // Get token from the Authorization header
-    console.log("token:",token)
+    let token = req.headers['authorization']?.split(' ')[1];
+
+    console.log("token received:", token);
+
     if (!token) {
         return res.status(401).json({ message: 'No token provided' });
-    } 
-  try {
-    let tokenData = await decorder(token);
-    console.log(tokenData, "tokenData in getProfile");
-    let userData = await getUserProfile(tokenData);
-    res.json({
-        success: true,
-        message: "User profile fetched successfully",
-        user: userData})
-  } catch (error) {
-    console.error("Token verification failed:", error.message);
-    return res.status(401).json({ message: 'Invalid token' });
-  }
-}
-);
+    }
+
+    try {
+        const tokenData = await decorder(token);
+        console.log("tokenData:", tokenData);
+
+        const userData = await getUserProfile(tokenData);
+        
+        return res.json({
+            success: true,
+            message: "User profile fetched successfully",
+            user: userData
+        });
+
+    } catch (error) {
+        console.error("Token verification failed:", error.message);
+        return res.status(401).json({ message: 'Invalid token' });
+    }
+});
+
 
 const otpRequest = async  (req,res) => {
     try {

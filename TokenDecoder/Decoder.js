@@ -1,6 +1,6 @@
 const jwt = require('jsonwebtoken');
 // Ensure this environment variable is correctly loaded (e.g., using 'dotenv')
-const secretkey = process.env.secretkey; 
+const secretkey = process.env.secretKey; 
 
 const Decoder = async (token) => {
     // 1. Critical Check: Ensure token exists before trying to verify
