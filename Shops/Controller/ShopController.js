@@ -1,7 +1,7 @@
 const asyncHandler = require("express-async-handler");
 const jwt = require('jsonwebtoken');
 const  SaveProfileToCloud  = require('../CloudStorageCurds/SaveProfileToCloude')
-const secretkey = process.env.secretkey;
+const secretkey = process.env.secretKey;
 
 const {
     updateBankDetailsFunction,
