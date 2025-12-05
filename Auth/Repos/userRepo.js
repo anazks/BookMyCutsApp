@@ -3,6 +3,7 @@ const shoperModel = require('../Model/ShoperModel')
 const asyncHandler = require("express-async-handler");
 const { userLogin } = require("../Controllers/AuthController");
 const otpModel = require("../Model/OtpModel");
+const ShoperModel = require("../Model/ShoperModel");
 
 module.exports.createUser = asyncHandler(async (data)=>{
     try {
@@ -44,6 +45,15 @@ module.exports.deleteUserFunction = async (userId) => {
         return user
     } catch (error) {
         console.error(error)
+    }
+}
+
+module.exports.getAllShopOwners = async () => {
+    try {
+        const shopOwners = await ShoperModel.find();
+        return shopOwners
+    } catch (error) {
+        console.log(error)
     }
 }
 

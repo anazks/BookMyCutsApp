@@ -1,6 +1,8 @@
 const ShopModel = require('../Model/ShopModel');
 const ServiceModel = require('../Model/ServiceModel');
 const BarberModel = require('../Model/BarbarModel');
+const cloudinary = require('cloudinary').v2;
+const mongoose = require('mongoose')
 const BookingModel = require('../../Booking/Models/BookingModel')
 
 const UserModel = require('../../Auth/Model/UserModel')
@@ -176,13 +178,19 @@ module.exports.editBarberProfile = async (barberId,data) => {
 }
 
 module.exports.deleteBarberFunction = async (barberId) => {
-    try {
-        return await BarberModel.findByIdAndDelete(barberId)
-    } catch (error) {
-        console.error(error)
-    }
-}
+  if (!mongoose.Types.ObjectId.isValid(barberId)) {
+    const err = new Error('Invalid barber id')
+    err.status = 400
+    throw err
+  }
 
+  try {
+    return await BarberModel.findByIdAndDelete(barberId)
+  } catch (error) {
+    console.error('deleteBarberFunction error:', error)
+    throw error
+  }
+}
 module.exports.makePremiumFunction = async (shopId,data) => {
     try {
         const premiumStartDate = new Date()
@@ -305,3 +313,61 @@ module.exports.deleteShopFuntion = async (shopId) => {
         console.error(error)
     }
 }
+
+module.exports.saveProfileUrlToDB = async (shopId, newUrl) => {
+  try {
+    // 1️⃣ Find the shop document
+    const shop = await ShopModel.findById(shopId);
+    if (!shop) throw new Error("Shop not found");
+
+    // 2️⃣ If existing image, delete from Cloudinary
+    if (shop.ProfileImage) {
+      // extract public_id from Cloudinary URL
+      const publicId = shop.ProfileImage.split('/').slice(-2).join('/').split('.')[0];
+      await cloudinary.uploader.destroy(publicId, { resource_type: 'image' });
+    }
+
+    // 3️⃣ Update ProfileImage field with new URL
+    shop.ProfileImage = newUrl;
+    await shop.save();
+
+    // 4️⃣ Return the updated shop document
+    return shop;
+
+  } catch (error) {
+    console.error("Error saving profile URL to DB:", error);
+    throw new Error(error.message);
+  }
+};
+
+module.exports.deleteMediaFile = async (id) => {
+  try {
+    const result = await ShopModel.updateOne(
+      { "media._id": new mongoose.Types.ObjectId(id) },
+      { $pull: { media: { _id: new mongoose.Types.ObjectId(id) } } }
+    );
+
+    console.log("Delete result:", result);
+    return result;
+  } catch (error) {
+    console.error("Error in deleting media file:", error);
+  }
+};
+
+exports.updateMediaDetailsFunction = async (mediaId, title, description) => {
+  try {
+    const result = await ShopModel.updateOne(
+      { "media._id": new mongoose.Types.ObjectId(mediaId) },
+      {
+        $set: {
+          "media.$.title": title,
+          "media.$.description": description,
+        },
+      }
+    );
+    return result;
+  } catch (error) {
+    console.error("Error in repository (updateMediaDetails):", error);
+    throw error;
+  }
+};

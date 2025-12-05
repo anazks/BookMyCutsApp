@@ -1,7 +1,7 @@
 const asyncHandler = require("express-async-handler");
 const { registerUserUseCase,loginuserUsecause,registerShoperUseCase,loginShoperUsecause,sendOtpmobileNo,verifyOtpFunction } = require("../UseCauses/userUseCause");
 const decorder = require("../../TokenDecoder/Decoder");
-const {getUserProfile,deleteUserFunction} = require("../Repos/userRepo")
+const {getUserProfile,deleteUserFunction,getAllShopOwners} = require("../Repos/userRepo")
 const bcrypt = require('bcryptjs')
 const jwt = require('jsonwebtoken');
 
@@ -151,5 +151,30 @@ const deleteUser = async (req,res) => {
   }
 }
 
+const viewAllShopOwners = async (req,res) => {
+  try {
+    const shopOwners = await getAllShopOwners()
+    console.log("hi")
+    if(shopOwners){
+      res.status(200).json({
+        success:true,
+        message:"successfully fetched shop owners",
+        shopOwners
+      })
+    }else{
+      res.status(400).json({
+        success:false,
+        message:"failed to fetch shop owners data",
+      })
+    }
+  } catch (error) {
+    res.status(500).json({
+      success:false,
+      message:"internal server error"
+    })
+    console.log(error)
+  }
+}
 
-module.exports = {deleteUser,userRegistration,userLogin,ShopRegister,login,getUsers,getProfile,otpRequest,verifyOtp}
+
+module.exports = {viewAllShopOwners,deleteUser,userRegistration,userLogin,ShopRegister,login,getUsers,getProfile,otpRequest,verifyOtp}

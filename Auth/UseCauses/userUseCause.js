@@ -9,8 +9,8 @@ const ShoperModel = require("../Model/ShoperModel");
 const UserModel = require("../Model/UserModel")
 
 const secretKey =  process.env.secretKey;
-const accountSid = "AC3c6e80e571c483870c9c4ba324f7e781";
-const authToken = "086766ccde4cf06f87ec898ed9df7431";
+const accountSid = process.env.ACCOUNT_SID;
+const authToken = process.env.AUTH_TOKEN;
 const client = twilio(accountSid, authToken);
 
 
@@ -28,7 +28,7 @@ module.exports.loginuserUsecause = async (data) => {
     let email = data.email;
     console.log(email, "email in usecause");
     // Problem: You're passing email directly, but findUser expects an object with email property
-    let user = await findUser({email: email}); // Fix: Pass an object with email property
+    let user = await findUser({email: email}); 
     // Check if user exists
     if (!user) {
         return {message: "User not found"};
@@ -45,10 +45,12 @@ module.exports.loginuserUsecause = async (data) => {
     let {firstName} = user;
     let {mobileNo} = user;
     let {city} = user;
+    let {id} = user;
     let userData = {
         firstName,
         mobileNo,
-        city 
+        city,
+        id
     };
     
     console.log(token);
@@ -80,7 +82,9 @@ module.exports.loginShoperUsecause = asyncHandler(async(data)=>{
     let  {firstName} = user;
     let {mobileNo} = user;
     let {city} = user;
+    let {_id} = user;
     let userData ={
+            _id,
             firstName,
             mobileNo,
             city 

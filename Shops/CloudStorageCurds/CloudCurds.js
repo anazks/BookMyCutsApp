@@ -6,14 +6,23 @@ const ShopModel = require("../Model/ShopModel"); // Adjust path as needed
 
 const uploadMedia = async (req, res) => {
     try {
-        // FIX: Access shopId directly from req.params object
-        const shopId = req.params.id; // or const { shopId } = req.params;
+        // 1. Extract shopId from params
+        const shopId = req.params.id;
+        
+        // 2. Extract title and description from request body
+        const { title, description } = req.body; 
 
         console.log("Shop ID:", shopId); // Debug log
 
         // Validate shopId
         if (!shopId) {
             return res.status(400).json({ message: "Shop ID is required" });
+        }
+        
+        // VALIDATION: Ensure title is provided, as it's required by the subschema
+        if (!title || typeof title !== 'string' || title.trim().length === 0) {
+            // NOTE: Add validation for description here if it were required
+            return res.status(400).json({ message: "Media title is required in the request body." });
         }
 
         // Check if file exists (comes from Multer middleware)
@@ -31,11 +40,11 @@ const uploadMedia = async (req, res) => {
             resourceType = 'image';
         }
 
-        // Upload to Cloudinary using Promise and upload_stream
+        // Upload to Cloudinary using Promise and upload_stream (NO CHANGE HERE)
         const uploadResult = await new Promise((resolve, reject) => {
             const uploadStream = cloudinary.uploader.upload_stream(
                 {
-                    folder: `shop_media/${shopId}`, // Organize files by shop
+                    folder: `shop_media/${shopId}`, 
                     resource_type: resourceType,
                     public_id: `${Date.now()}_${media.originalname.split('.')[0]}`, 
                     unique_filename: true,
@@ -53,25 +62,38 @@ const uploadMedia = async (req, res) => {
             uploadStream.end(media.buffer); 
         });
 
-        // Find and update shop - push only the URL to media array
+        // 3. Construct the media object to be saved
+        const newMediaObject = {
+            url: uploadResult.secure_url,
+            title: title,
+            description: description || '' // Use the description or an empty string if not provided
+        };
+
+        // 4. Find and update shop - push the ENTIRE OBJECT to the media array
         const updatedShop = await ShopModel.findByIdAndUpdate(
             shopId,
             {
                 $push: {
-                    media: uploadResult.secure_url
+                    media: newMediaObject // Pushing the object now
                 }
             },
-            { new: true, runValidators: true } // Return updated document
+            { 
+                new: true, 
+                runValidators: true // IMPORTANT: runs validators on the new embedded object
+            } 
         );
 
-        // Check if shop exists
+        // Check if shop exists (NO CHANGE HERE)
         if (!updatedShop) {
+            // Also recommended: Delete the file from Cloudinary if the shop is not found
+            // await cloudinary.uploader.destroy(uploadResult.public_id, { resource_type: resourceType });
             return res.status(404).json({ message: "Shop not found" });
         }
 
-        // Return success response with updated shop document
+        // Return success response with updated shop document (NO CHANGE HERE)
         return res.status(200).json({
-            message: "File uploaded successfully",
+            message: "File uploaded successfully and metadata saved.",
+            media: newMediaObject,
             shop: updatedShop
         });
 

@@ -7,7 +7,7 @@ const multer = require('multer');
 // The storage object is a method ON the multer package itself.
 const storage = multer.memoryStorage(); 
 
-// 3. Create the Multer instance with the defined storage
+// 3. Create the Multer instance with the defined storage   
 // This instance holds the methods like .single(), .array(), etc.
 const upload = multer({ storage: storage }); 
 

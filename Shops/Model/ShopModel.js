@@ -3,6 +3,9 @@ const shopOwner = require('../../Auth/Model/ShoperModel'); // adjust path
 
 const ShopSchema = new mongoose.Schema(
   {
+    ProfileImage:{
+      type:String
+    },
     ShopName: {
       type: String,
       required: true,
@@ -51,9 +54,23 @@ const ShopSchema = new mongoose.Schema(
         message: props => `${props.value} is not a valid website URL!`
       }
     },
-    media: {
-      type: [String],
-      required: false,
+      media: {
+        type: [{
+            url: {
+                type: String,
+                required: true // The image URL is mandatory
+            },
+            title: {
+                type: String,
+                required: true // The title/caption is mandatory
+            },
+            description: {
+                type: String,
+                required: false // Description can be optional
+            }
+        }],
+        required: false, // The array itself is optional
+        default: [] // Good practice to default arrays to empty
     },
     ShopOwnerId: {
       type: mongoose.Schema.Types.ObjectId,

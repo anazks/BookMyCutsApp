@@ -1,5 +1,6 @@
 const asyncHandler = require("express-async-handler");
 const jwt = require('jsonwebtoken');
+const  SaveProfileToCloud  = require('../CloudStorageCurds/SaveProfileToCloude')
 const secretkey = process.env.secretkey;
 
 const {
@@ -28,7 +29,9 @@ const {
     editServiceFunction,
     deleteServiceFunction,
     deleteShopFuntion,
-    findNearbyShopsFunction
+    findNearbyShopsFunction,
+    deleteMediaFile,
+    updateMediaDetailsFunction
 } = require('../Repo/ShopRepo');
 const Decoder = require("../../TokenDecoder/Decoder");
 const { json } = require("express");
@@ -338,14 +341,6 @@ const viewMyBarbers = asyncHandler(async (req, res) => {
     try {
         const tokenData = await Decoder(token);
         const myBarbers = await getMyBarbers(tokenData.id);
-        
-        if (!myBarbers || myBarbers.length === 0) {
-            return res.status(200).json({
-                success: false,
-                message: "No barbers found for this shop"
-            });
-        }
-        
         return res.status(200).json({
             success: true,
             message: "Barbers retrieved successfully",
@@ -366,13 +361,6 @@ const viewAllBookingOfShops = asyncHandler(async (req, res) => {
         const tokenData = await Decoder(token);
         console.log(tokenData)
         const bookings = await getAllBookingsOfShop(tokenData.id);
-        
-        if (!bookings || bookings.length === 0) {
-            return res.status(404).json({
-                success: false,
-                message: "No bookings found for this shop"
-            });
-        }
         console.log(bookings)
         return res.status(200).json({
             success: true,
@@ -465,12 +453,12 @@ const viewSingleShopService = asyncHandler(async (req, res) => {
 
     try {
         const services = await getShopService(shopId);
-        if (!services || services.length === 0) {
-            return res.status(404).json({
-                success: false,
-                message: "No services found for this shop"
-            });
-        }
+        // if (!services || services.length === 0) {
+        //     return res.status(404).json({
+        //         success: false,
+        //         message: "No services found for this shop"
+        //     });
+        // }
         
         return res.status(200).json({
             success: true,
@@ -496,12 +484,12 @@ const viewSingleShopBarbers = asyncHandler(async (req, res) => {
 
     try {
         const barbers = await getShopBarbers(shopId);
-        if (!barbers || barbers.length === 0) {
-            return res.status(404).json({
-                success: false,
-                message: "No barbers found for this shop"
-            });
-        }
+        // if (!barbers || barbers.length === 0) {
+        //     return res.status(404).json({
+        //         success: false,
+        //         message: "No barbers found for this shop"
+        //     });
+        // }
         
         return res.status(200).json({
             success: true,
@@ -545,24 +533,33 @@ const updateBarber = async (req,res) => {
 }
 
 const deleteBarber = async (req, res) => {
-     try {
-         const barberId = req.params.id
-         const barber = await deleteBarberFunction(barberId)
-         if(!barber || barber.length === 0){
-            return res.status(404).json({
-                success:true,
-                message:"successfull deleted"
-            })
-         }
+  try {
+    const barberId = req.params.id
+    const barber = await deleteBarberFunction(barberId)
 
-     } catch (error) {
-        console.error(error)
-        res.status(500).json({
-            success:false,
-            message:"internal server error"
-        })
-     }
+    if (!barber) {
+      // nothing was deleted because document not found
+      return res.status(404).json({
+        success: false,
+        message: 'Barber not found'
+      })
+    }
+
+    // deletion successful — return the deleted document or a success message
+    return res.status(200).json({
+      success: true,
+      message: 'Barber successfully deleted',
+      data: barber
+    })
+  } catch (error) {
+    console.error(error)
+    return res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    })
+  }
 }
+
 
 const makePremium =  async (req,res) => {
     try {
@@ -813,9 +810,95 @@ const deleteShop = async (req,res) => {
     }
 }
 
+const addProfileImage = async (req,res) => {
+    try {
+        const shopId  = req.params.id
+        const media = req.file 
+        if(!shopId){
+            res.status(404).json({error:"shopId is required"})
+        }
+        if(!media){
+            res.status(404).json({error:"no image uploaded"})
+        }
+        const result = await SaveProfileToCloud(media,shopId)
+        res.status(200).json({
+            success:true,
+            result
+        })
+        
+    } catch (error) {
+        res.status(500).json({
+            error: "internal server error"
+        })
+        console.log(error)
+    }
+}
+
+const deleteMedia = async (req,res) => {
+    try {
+        const id = req.params.id
+        const result = await deleteMediaFile(id)
+        if(result){
+           return res.status(200).json({
+                success:true,
+                message:"successfully deleted the file"
+            })
+        }
+        return res.status(404).json({
+            success:false,
+            message:"failed to delete the file"
+        })
+    } catch (error) {
+        console.log("Error in deleting file",error)
+       return res.status(500).json({
+            success:false,
+            message:"internal server error"
+        })
+    }
+}
+
+const updateMediaDetails = async (req, res) => {
+  try {
+    const { mediaId } = req.params;
+    const { title, description } = req.body;
+
+    if (!title || !description) {
+      return res.status(400).json({
+        success: false,
+        message: "Both title and description are required",
+      });
+    }
+
+    const result = await updateMediaDetailsFunction(mediaId, title, description);
+
+    if (!result || result.matchedCount === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "Media not found",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Media updated successfully",
+      result,
+    });
+  } catch (error) {
+    console.error("Error updating media:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Server error",
+      error: error.message,
+    });
+  }
+};
+
 
 
 module.exports = {
+    updateMediaDetails,
+    deleteMedia,
+    addProfileImage,
     deleteShop,
     findNearByShops,
     deleteService,

@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const multer = require('multer')
-const {viewMyshop,viewSingleShopBarbers,viewSingleShopService,myprofile,viewAllBookingOfShops,myShopProfile,AddShop,ViewAllShop,addService,ViewAllServices,addBarber,ViewAllBarbers,viewSigleShop,viewMyService,viewMyBarbers,updateBarber, deleteBarber,makePremium, getAllPremiumShops, saveBankDetails, viewbankDetails, deleteBankDetails, upadateBankdetails,editService, deleteService,findNearByShops,deleteShop} = require('../Controller/ShopController')
+const {viewMyshop,viewSingleShopBarbers,viewSingleShopService,myprofile,viewAllBookingOfShops,myShopProfile,AddShop,ViewAllShop,addService,ViewAllServices,addBarber,ViewAllBarbers,viewSigleShop,viewMyService,viewMyBarbers,updateBarber, deleteBarber,makePremium, getAllPremiumShops, saveBankDetails, viewbankDetails, deleteBankDetails, upadateBankdetails,editService, deleteService,findNearByShops,deleteShop,addProfileImage,deleteMedia,updateMediaDetails} = require('../Controller/ShopController')
 const {uploadMedia}  = require('../../Shops/CloudStorageCurds/CloudCurds')
 const upload = require('../../Cloudinary/MulterConfig')
 
@@ -9,7 +9,7 @@ router.route('/addShop').post(AddShop)
 router.route('/getMyProfile').get(myprofile)
 router.route('/ViewAllShop').get(ViewAllShop)
 router.route('/viewSigleShop').post(viewSigleShop)
-router.route('/viewMyshop').get(viewMyshop)
+router.route('/viewMyshop').get(viewMyshop) 
 router.route('/viewMyBooking').get(viewAllBookingOfShops)
 router.route('/findNearByShops').get(findNearByShops)
 router.route('/deleteShop/:id').delete(deleteShop)
@@ -23,9 +23,8 @@ router.route('/viewSingleShopService/:id').get(viewSingleShopService) // Assumin
 router.route('/editService/:id').put(editService)
 router.route('/deleteService/:id').delete(deleteService)
 
-router.route('/viewSingleShopBarbers/').get(viewSingleShopBarbers) // Assuming this is a function
+router.route('/viewSingleShopBarbers/:id').get(viewSingleShopBarbers) // Assuming this is a function
 
-router.route('/uploadMedia/:id').post(upload.single('file'), uploadMedia);  // Now defined
 
 router.route('/addBarber').post(addBarber)
 router.route('/ViewAllBarbers').get(ViewAllBarbers)
@@ -41,5 +40,10 @@ router.route('/viewBankDetails/:id').get(viewbankDetails)
 router.route('/deleteBankDetails/:id').delete(deleteBankDetails)
 router.route('/updateBankdetails/:id').put(upadateBankdetails)
 
+// cloude storage api
+router.route('/uploadMedia/:id').post(upload.single('file'), uploadMedia);  
+router.route('/addProfileImage/:id').post(upload.single('file'),addProfileImage)
+router.route('/deleteMedia/:id').delete(deleteMedia)
+router.route('/updateMedia/:mediaId').put(updateMediaDetails)
 
 module.exports = router;
