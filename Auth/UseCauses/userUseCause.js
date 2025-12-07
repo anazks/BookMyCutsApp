@@ -9,9 +9,7 @@ const ShoperModel = require("../Model/ShoperModel");
 const UserModel = require("../Model/UserModel")
 
 const secretKey =  process.env.secretKey;
-const accountSid = process.env.ACCOUNT_SID;
-const authToken = process.env.AUTH_TOKEN;
-const client = twilio(accountSid, authToken);
+
 
 
 module.exports.registerUserUseCase = async (data)=>{
@@ -94,37 +92,68 @@ module.exports.loginShoperUsecause = asyncHandler(async(data)=>{
 })
 
 module.exports.sendOtpmobileNo = async (data) => {
-  let {mobileNo,role} = data
+  // Input validation
+  if (!data || typeof data !== 'object') {
+    throw new Error('Invalid input data provided');
+  }
+  const { mobileNo, role } = data;
+  if (!mobileNo || typeof mobileNo !== 'string' || mobileNo.length < 10) {
+    throw new Error('Invalid mobile number provided');
+  }
+  if (!role || (role !== 'user' && role !== 'shopper')) {
+    throw new Error('Invalid role specified. Must be "user" or "shopper"');
+  }
+
+  // Twilio credentials (standardized names - update your Render env vars!)
+  const accountSid = process.env.TWILIO_ACCOUNT_SID;
+  const authToken = process.env.TWILIO_AUTH_TOKEN;
+
+  if (!accountSid || !authToken) {
+    console.error('Twilio credentials missing! SID present:', !!accountSid, 'Token length:', authToken ? authToken.length : 0);
+    throw new Error('Twilio configuration required - check environment variables');
+  }
+
+  const client = twilio(accountSid, authToken);
+
+  let model;
   try {
-    let model;
-    if (role === "user") {
+    // Select model based on role
+    if (role === 'user') {
       model = UserModel;
-    } else if (role === "shopper") {
-      model = ShoperModel;
-    } else {
-      // Handle an invalid role, if necessary
-      return "Invalid role specified";
+    } else if (role === 'shopper') {
+      model = ShopperModel;
     }
 
+    // Check if mobile exists
     const exists = await model.exists({ mobileNo });
     if (!exists) {
-      return "the mobile number is not registered"
+      throw new Error('The mobile number is not registered');
     }
- 
-    const otp = Math.floor(1000 + Math.random() * 9000); // 4-digit OTP
-    await otpModel.create({ mobileNo, otp });
-    const formattedNumber = mobileNo.startsWith("+") ? mobileNo : `+91${mobileNo}`;
 
+    // Generate and store OTP with expiration
+    const otp = Math.floor(1000 + Math.random() * 9000); // 4-digit OTP
+    await otpModel.create({
+      mobileNo,
+      otp,
+      expiresAt: new Date(Date.now() + 10 * 60 * 1000)  // Expires in 10 minutes
+    });
+
+    // Format phone number (basic; use libphonenumber-js for advanced)
+    const formattedNumber = mobileNo.startsWith('+') ? mobileNo : `+91${mobileNo}`;
+
+    // Send SMS
     await client.messages.create({
-      body: `Your OTP is ${otp}`,
-      from: "18573746399",
+      body: `Your OTP is ${otp}. Valid for 10 minutes.`,
+      from: process.env.TWILIO_PHONE_NUMBER || '+18573746399',  // Use env var for 'from' number
       to: formattedNumber,
     });
 
-    return otp;
+    // Return success with OTP (for testing; in prod, don't return OTP—use separate verify endpoint)
+    return { success: true, otp };
+
   } catch (error) {
-    console.error('Error sending OTP:', error);
-    throw error;
+    console.error('Error sending OTP for mobile (anonymized):', mobileNo.substring(0, 3) + '...', error.message);
+    throw error;  // Re-throw for caller (e.g., AuthController) to handle
   }
 };
 
