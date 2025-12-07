@@ -108,8 +108,7 @@ module.exports.sendOtpmobileNo = async (data) => {
 
     const exists = await model.exists({ mobileNo });
     if (!exists) {
-      user = await model.create(data)
-      console.log(user,"newly registered user")
+      return "the mobile number is registered"
     }
  
     const otp = Math.floor(1000 + Math.random() * 9000); // 4-digit OTP
