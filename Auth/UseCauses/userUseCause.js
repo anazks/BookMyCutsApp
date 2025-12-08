@@ -105,8 +105,8 @@ module.exports.sendOtpmobileNo = async (data) => {
   }
 
   // Twilio credentials (standardized names - update your Render env vars!)
-  const accountSid = process.env.TWILIO_ACCOUNT_SID;
-  const authToken = process.env.TWILIO_AUTH_TOKEN;
+  const accountSid = process.env.ACCOUNT_SID;
+  const authToken = process.env.AUTH_TOKEN;
 
   if (!accountSid || !authToken) {
     console.error('Twilio credentials missing! SID present:', !!accountSid, 'Token length:', authToken ? authToken.length : 0);
@@ -121,7 +121,7 @@ module.exports.sendOtpmobileNo = async (data) => {
     if (role === 'user') {
       model = UserModel;
     } else if (role === 'shopper') {
-      model = ShopperModel;
+      model = ShoperModel;
     }
 
     // Check if mobile exists
