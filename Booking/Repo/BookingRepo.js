@@ -149,7 +149,7 @@ module.exports.updateBooking = async ({
       paymentType === 'full' ? 'paid' : 'partial';
     booking.bookingStatus = 'confirmed';
 
-    await BookingModel.save();
+    await booking.save();
 
     return booking;
   } catch (error) {
