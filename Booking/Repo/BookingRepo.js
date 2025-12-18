@@ -128,7 +128,7 @@ module.exports.updateBooking = async ({
   totalPrice
 }) => {
   try {
-    const booking = await Booking.findById(bookingId);
+    const booking = await BookingModel.findById(bookingId);
 
     if (!booking) {
       throw new Error('Booking not found');
@@ -149,7 +149,7 @@ module.exports.updateBooking = async ({
       paymentType === 'full' ? 'paid' : 'partial';
     booking.bookingStatus = 'confirmed';
 
-    await booking.save();
+    await BookingModel.save();
 
     return booking;
   } catch (error) {
