@@ -120,7 +120,7 @@ module.exports.findDashboardIncomeFuncion = async (shopId) => {
 };
 
 
-const updateBooking = async ({
+module.exports.updateBooking = async ({
   bookingId,
   paymentId,
   paymentType,
