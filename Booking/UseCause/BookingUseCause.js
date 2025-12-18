@@ -78,14 +78,28 @@ module.exports.bookNow = async (data, decodedValue) => {
   }
 };
 
-module.exports.bookingCompletion = (data)=>{
-    try {
-      let response = updateBooking(data)
-      return response
-    } catch (error) {
-        console.log(error)
-        return null
-    }
-}
+module.exports.bookingCompletion = async (details) => {
+  try {
+    const {
+      bookingId,
+      razorpay_payment_id,
+      paymentType,
+      amount
+    } = details;
+
+    const updatedBooking = await updateBooking({
+      bookingId,
+      paymentId: razorpay_payment_id,
+      paymentType,
+      amountPaid: Number(amount),
+      totalPrice: Number(details.totalPrice || amount)
+    });
+
+    return updatedBooking;
+  } catch (error) {
+    console.error('bookingCompletion error:', error);
+    throw error;
+  }
+}  
 
 

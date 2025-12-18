@@ -118,3 +118,42 @@ module.exports.findDashboardIncomeFuncion = async (shopId) => {
     console.error(error);
   }
 };
+
+
+const updateBooking = async ({
+  bookingId,
+  paymentId,
+  paymentType,
+  amountPaid,
+  totalPrice
+}) => {
+  try {
+    const booking = await Booking.findById(bookingId);
+
+    if (!booking) {
+      throw new Error('Booking not found');
+    }
+
+    // Calculate remaining amount
+    const remainingAmount =
+      paymentType === 'full'
+        ? 0
+        : Math.max(totalPrice - amountPaid, 0);
+
+    // Update fields
+    booking.paymentId = paymentId;
+    booking.paymentType = paymentType;
+    booking.amountPaid = amountPaid;
+    booking.remainingAmount = remainingAmount;
+    booking.paymentStatus =
+      paymentType === 'full' ? 'paid' : 'partial';
+    booking.bookingStatus = 'confirmed';
+
+    await booking.save();
+
+    return booking;
+  } catch (error) {
+    console.error('updateBooking error:', error);
+    throw error;
+  }
+};
