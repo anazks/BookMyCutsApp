@@ -6,15 +6,15 @@ const bookingSchema = new mongoose.Schema({
     ref: 'Barber',
     required: true
   },
-  barberName: String,
-  barberNativePlace: String,
-
   userId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'user',
     required: true
   },
-  shopId: String, // optional: storing original string ID if needed
+  shopId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref:'shop'
+  },
 
   serviceIds: [{
     type: mongoose.Schema.Types.ObjectId,
@@ -27,14 +27,25 @@ const bookingSchema = new mongoose.Schema({
     duration: Number
   }],
 
-  bookingDate: String,
-  timeSlotId: Number,
-  timeSlotName: String,
-  timeSlotStart: String,
-  timeSlotEnd: String,
+  // bookingDate: String,
+  // timeSlotId: Number,
+  // timeSlotName: String,
 
-  startTime: Date,
-  endTime: Date,
+  bookingDate:{
+    type:Date,
+    required:true
+  },
+
+  timeSlot: {
+    startingTime: {
+      type: Date,
+      required: true
+    },
+    endingTime: {
+      type: Date,
+      required: true
+    }
+  },
 
   totalPrice: Number,
   totalDuration: Number,

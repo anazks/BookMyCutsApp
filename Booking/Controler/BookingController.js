@@ -1,5 +1,5 @@
 const Decoder = require('../../TokenDecoder/Decoder')
-const {checkAvailble,bookNow,bookingCompletion} = require('../UseCause/BookingUseCause')
+const {checkAvailble,bookNow,bookingCompletion,getBarberFreeTime} = require('../UseCause/BookingUseCause')
 const {mybooking,findDashboardIncomeFuncion} = require('../Repo/BookingRepo')
 const RazorPay = require('../../Razorpay/RazorpayConfig')
 const mongoose = require('mongoose');
@@ -158,6 +158,38 @@ const findDashboardIncome =  async (req, res) => {
     }
 }
 
-module.exports = {checkAvailability,AddBooking,getMybooking,createOrder,findDashboardIncome,verifyPayment}
+
+const barberFreeSlots = async (req,res) => { 
+    try {
+        const barberId = req.body.barberId
+        const bookingDate = req.body.bookingDate
+        console.log(barberId)
+        console.log(bookingDate)
+        const availableHours = await getBarberFreeTime(barberId,bookingDate)
+        if(availableHours){
+            res.status(200).json({
+                success:true,
+                message:"successfully fetched free hours of barber",
+                availableHours
+            })
+        }else{
+            res.status(404).json({
+                success:true,
+                message:"failed to fetch  barber bookings hours",
+            })
+        }
+
+    } catch (error) {
+        console.error(error)
+        res.status(500).json({
+            success:false,
+            message:"internal server error",
+        })
+    }
+}
+
+
+
+module.exports = {checkAvailability,AddBooking,getMybooking,createOrder,findDashboardIncome,verifyPayment,barberFreeSlots}
 
 

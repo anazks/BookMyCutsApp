@@ -18,6 +18,30 @@ module.exports.addBookings = async(data)=>{
         return error
     }
 }
+
+module.exports.isSlotConflicting = async (
+  barberId,
+  bookingDate,
+  startDateTime,
+  endDateTime
+) => {
+  const conflict = await BookingModel.findOne({
+    barberId: new mongoose.Types.ObjectId(barberId),
+
+    // Make sure bookingDate is the same DAY
+    bookingDate: new Date(bookingDate),
+
+    bookingStatus: { $in: ["pending", "confirmed"] },
+
+    "timeSlot.startingTime": { $lt: endDateTime },
+    "timeSlot.endingTime": { $gt: startDateTime }
+  });
+
+  console.log(conflict, "already bookings");
+  return !!conflict;
+};
+
+
 module.exports.mybooking = async(userId)=>{
     try {
         let bookings = await BookingModel.find({userId: userId})

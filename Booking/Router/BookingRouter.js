@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 
-const {checkAvailability,AddBooking,createOrder,getMybooking,findDashboardIncome,verifyPayment} = require('../Controler/BookingController');
+const {checkAvailability,AddBooking,createOrder,getMybooking,findDashboardIncome,verifyPayment,barberFreeSlots} = require('../Controler/BookingController');
 const { verifyToken } = require('../../Middlewares/AuthMiddleWares/AuthMiddleWare');
 
 // const {checkAvailability,AddBooking,getMybooking} = require('../Controler/BookingController')
@@ -20,5 +20,6 @@ router.route('/create-order').post(verifyToken,createOrder)
 router.route('/verifyPayment').post(verifyToken,verifyPayment)
 
 router.route('/dashboardIncome').get(findDashboardIncome)
+router.route('/getBarberFreeTime').get(barberFreeSlots)
 
 module.exports = router;

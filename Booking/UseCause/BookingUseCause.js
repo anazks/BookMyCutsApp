@@ -1,4 +1,5 @@
-const {checkBookings,addBookings,updateBooking} = require('../Repo/BookingRepo')
+const BookingModel = require('../Models/BookingModel');
+const {checkBookings,addBookings,updateBooking,isSlotConflicting} = require('../Repo/BookingRepo')
 const mongoose = require('mongoose');
 
 module.exports.checkAvailable = async (data) => {
@@ -15,21 +16,39 @@ module.exports.checkAvailable = async (data) => {
 
 
 
+
+
 module.exports.bookNow = async (data, decodedValue) => {
   try {
-    // decodedValue.id is the userId, not the shop
     data.userId = decodedValue.id;
 
-    const startTime = new Date(`${data.bookingDate}T${data.timeSlotStart}:00`);
-    const endTime = new Date(`${data.bookingDate}T${data.timeSlotEnd}:00`);
+    // ✅ Extract dates directly from request
+    const startTime = new Date(data.timeSlot.startingTime);
+    const endTime = new Date(data.timeSlot.endingTime);
 
+    // 🛡️ Safety check (VERY IMPORTANT)
+    if (isNaN(startTime.valueOf()) || isNaN(endTime.valueOf())) {
+      throw new Error("Invalid time slot provided");
+    }
+
+    // --- STEP 1: CONFLICT CHECK ---
+    const hasConflict = await isSlotConflicting(
+      data.barberId,
+      data.bookingDate,
+      startTime,
+      endTime
+    );
+
+    if (hasConflict) {
+      throw new Error("This time slot is already booked by someone else.");
+    }
+
+    // --- STEP 2: PREPARE BOOKING DATA ---
     const bookingData = {
       barberId: new mongoose.Types.ObjectId(data.barberId),
-      barberName: data.barberName,
-      barberNativePlace: data.barberNativePlace,
 
-      userId: new mongoose.Types.ObjectId(data.userId), // ✅ Fixed
-      shopId: data.shopId, // ✅ Keep original string if needed
+      userId: new mongoose.Types.ObjectId(data.userId),
+      shopId: new mongoose.Types.ObjectId(data.shopId),
 
       serviceIds: data.serviceIds?.map(id => new mongoose.Types.ObjectId(id)) || [],
       services: data.services?.map(service => ({
@@ -39,14 +58,12 @@ module.exports.bookNow = async (data, decodedValue) => {
         duration: service.duration
       })) || [],
 
-      bookingDate: data.bookingDate,
-      timeSlotId: data.timeSlotId,
-      timeSlotName: data.timeSlotName,
-      timeSlotStart: data.timeSlotStart,
-      timeSlotEnd: data.timeSlotEnd,
+      bookingDate: new Date(data.bookingDate),
 
-      startTime,
-      endTime,
+      timeSlot: {
+        startingTime: startTime,
+        endingTime: endTime
+      },
 
       totalPrice: data.totalPrice,
       totalDuration: data.totalDuration,
@@ -56,27 +73,30 @@ module.exports.bookNow = async (data, decodedValue) => {
       remainingAmount: data.remainingAmount,
       currency: data.currency,
 
-      bookingTimestamp: new Date(data.bookingTimestamp || Date.now()),
+      bookingTimestamp: new Date(),
 
-      bookingStatus: 'pending',
-      paymentStatus: data.paymentType === 'advance'
-        ? (data.remainingAmount > 0 ? 'partial' : 'paid')
-        : 'unpaid',
-      amountPaid: data.paymentType === 'advance' ? data.amountToPay : 0,
+      bookingStatus: "pending",
+      paymentStatus:
+        data.paymentType === "advance"
+          ? (data.remainingAmount > 0 ? "partial" : "paid")
+          : "unpaid",
+
+      amountPaid:
+        data.paymentType === "advance" ? data.amountToPay : 0,
 
       createdAt: new Date()
     };
 
-    console.log(bookingData, "final model-ready data");
-
-    const Booking = await addBookings(bookingData);
-    return Booking;
+    // --- STEP 3: SAVE ---
+    const newBooking = await addBookings(bookingData);
+    return newBooking;
 
   } catch (error) {
-    console.error("Booking error:", error);
-    return error;
+    console.error("Booking error:", error.message);
+    throw error;
   }
 };
+
 
 module.exports.bookingCompletion = async (details) => {
   try {
@@ -103,3 +123,79 @@ module.exports.bookingCompletion = async (details) => {
 }  
 
 
+
+
+
+
+const formatMinutes = (minutes) => {
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
+};
+
+module.exports.getBarberFreeTime = async (barberId, bookingDate) => {
+  try {
+    // Convert bookingDate to start and end of day in UTC
+ const bookingDay = new Date(bookingDate); // bookingDate is '2025-12-23'
+bookingDay.setHours(0, 0, 0, 0); // Start of day local time
+
+const startOfDay = new Date(bookingDay);
+const endOfDay = new Date(bookingDay);
+endOfDay.setHours(23, 59, 59, 999);
+
+    // Fetch all bookings for that barber on that day
+console.log("Querying bookings for:", barberId, startOfDay, endOfDay);
+const bookings = await BookingModel.find({
+  barberId: new mongoose.Types.ObjectId(barberId),
+  bookingDate: { $gte: startOfDay, $lte: endOfDay },
+  bookingStatus: { $in: ["pending", "confirmed"] }
+});
+console.log("Found bookings:", bookings);
+
+
+BookingModel.find({ barberId: new mongoose.Types.ObjectId(barberId) })
+  .then(bookings => console.log("Booking of barber",bookings))
+  .catch(err => console.error(err));
+    console.log('Bookings for the day:', bookings);
+
+    // Define working hours (example: 09:00 to 18:00)
+    const workStart = 9 * 60; // 09:00 in minutes
+    const workEnd = 18 * 60;  // 18:00 in minutes
+
+    let currentPos = workStart; // Start from beginning of working hours
+    const freeGaps = [];
+
+    bookings.forEach(booking => {
+      // Extract starting and ending time in local minutes
+      const bStart = booking.timeSlot.startingTime.getHours() * 60 + booking.timeSlot.startingTime.getMinutes();
+      const bEnd = booking.timeSlot.endingTime.getHours() * 60 + booking.timeSlot.endingTime.getMinutes();
+
+      // If there's space before this booking
+      if (bStart > currentPos) {
+        freeGaps.push({
+          from: formatMinutes(currentPos),
+          to: formatMinutes(bStart),
+          minutes: bStart - currentPos
+        });
+      }
+
+      // Move pointer to the end of this booking
+      currentPos = Math.max(currentPos, bEnd);
+    });
+
+    // Check for gap after the last booking until end of workday
+    if (currentPos < workEnd) {
+      freeGaps.push({
+        from: formatMinutes(currentPos),
+        to: formatMinutes(workEnd),
+        minutes: workEnd - currentPos
+      });
+    }
+
+    return { success: true, freeGaps };
+
+  } catch (error) {
+    console.error("Availability error:", error);
+    return { success: false, error: error.message };
+  }
+};
