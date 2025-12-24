@@ -20,6 +20,6 @@ router.route('/create-order').post(verifyToken,createOrder)
 router.route('/verifyPayment').post(verifyToken,verifyPayment)
 
 router.route('/dashboardIncome').get(findDashboardIncome)
-router.route('/getBarberFreeTime').get(barberFreeSlots)
+router.route('/getBarberFreeTime').post(barberFreeSlots)
 
 module.exports = router;
