@@ -23,7 +23,7 @@ module.exports.bookNow = async (data, decodedValue) => {
     data.userId = decodedValue.id;
 
     // ✅ Extract dates directly from request
-    const startTime = new Date(data.timeSlot.startingTime);
+      const startTime = new Date(data.timeSlot.startingTime);
     const endTime = new Date(data.timeSlot.endingTime);
 
     // 🛡️ Safety check (VERY IMPORTANT)
