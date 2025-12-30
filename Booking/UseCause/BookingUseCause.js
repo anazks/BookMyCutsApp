@@ -1,5 +1,6 @@
 const BookingModel = require('../Models/BookingModel');
 const {checkBookings,addBookings,updateBooking,isSlotConflicting} = require('../Repo/BookingRepo')
+const WorkingHours = require('../../Shops/Model/WorkingHours')
 const mongoose = require('mongoose');
 
 module.exports.checkAvailable = async (data) => {
@@ -127,75 +128,88 @@ module.exports.bookingCompletion = async (details) => {
 
 
 
-const formatMinutes = (minutes) => {
-  const h = Math.floor(minutes / 60);
-  const m = minutes % 60;
-  return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
-};
+function toISTHHMM(date) {
+  const options = { timeZone: "Asia/Kolkata", hour: "2-digit", minute: "2-digit", hourCycle: "h23" };
+  return new Date(date).toLocaleTimeString("en-IN", options);
+}
 
-module.exports.getBarberFreeTime = async (barberId, bookingDate) => {
+function formatMinutes(min) {
+  const h = Math.floor(min / 60).toString().padStart(2, "0");
+  const m = (min % 60).toString().padStart(2, "0");
+  return `${h}:${m}`;
+}
+
+module.exports.getBarberFullSchedule = async (barberId, bookingDate,shopId) => {
   try {
-    // Convert bookingDate to start and end of day in UTC
- const bookingDay = new Date(bookingDate); // bookingDate is '2025-12-23'
-bookingDay.setHours(0, 0, 0, 0); // Start of day local time
-
-const startOfDay = new Date(bookingDay);
-const endOfDay = new Date(bookingDay);
-endOfDay.setHours(23, 59, 59, 999);
-
-    // Fetch all bookings for that barber on that day
-console.log("Querying bookings for:", barberId, startOfDay, endOfDay);
-const bookings = await BookingModel.find({
-  barberId: new mongoose.Types.ObjectId(barberId),
-  bookingDate: { $gte: startOfDay, $lte: endOfDay },
-  bookingStatus: { $in: ["pending", "confirmed"] }
-});
-console.log("Found bookings:", bookings);
-
-
-BookingModel.find({ barberId: new mongoose.Types.ObjectId(barberId) })
-  .then(bookings => console.log("Booking of barber",bookings))
-  .catch(err => console.error(err));
-    console.log('Bookings for the day:', bookings);
-
-    // Define working hours (example: 09:00 to 18:00)
-    const workStart = 9 * 60; // 09:00 in minutes
-    const workEnd = 18 * 60;  // 18:00 in minutes
-
-    let currentPos = workStart; // Start from beginning of working hours
-    const freeGaps = [];
-
-    bookings.forEach(booking => {
-      // Extract starting and ending time in local minutes
-      const bStart = booking.timeSlot.startingTime.getHours() * 60 + booking.timeSlot.startingTime.getMinutes();
-      const bEnd = booking.timeSlot.endingTime.getHours() * 60 + booking.timeSlot.endingTime.getMinutes();
-
-      // If there's space before this booking
-      if (bStart > currentPos) {
-        freeGaps.push({
-          from: formatMinutes(currentPos),
-          to: formatMinutes(bStart),
-          minutes: bStart - currentPos
-        });
-      }
-
-      // Move pointer to the end of this booking
-      currentPos = Math.max(currentPos, bEnd);
-    });
-
-    // Check for gap after the last booking until end of workday
-    if (currentPos < workEnd) {
-      freeGaps.push({
-        from: formatMinutes(currentPos),
-        to: formatMinutes(workEnd),
-        minutes: workEnd - currentPos
-      });
+    if (!mongoose.Types.ObjectId.isValid(shopId) || !mongoose.Types.ObjectId.isValid(barberId)) {
+      return { success: false, message: "Invalid barberId or shopId" };
     }
 
-    return { success: true, freeGaps };
+    const bookingDay = new Date(`${bookingDate}T00:00:00+05:30`);
+    const startOfDayUTC = new Date(bookingDay);
+    const endOfDayUTC = new Date(bookingDay);
+    endOfDayUTC.setHours(23, 59, 59, 999);
 
-  } catch (error) {
-    console.error("Availability error:", error);
-    return { success: false, error: error.message };
+    const workingHours = await WorkingHours.findOne({ shop: new mongoose.Types.ObjectId(shopId) }).lean();
+    if (!workingHours) return { success: false, message: "Working hours not found for this shop" };
+
+    const dayOfWeek = bookingDay.getDay();
+    const daySchedule = workingHours.days.find(d => d.day === dayOfWeek);
+    if (!daySchedule || daySchedule.isClosed) return { success: false, message: "Shop is closed on this day" };
+
+    const workStart = daySchedule.open;
+    const workEnd = daySchedule.close;
+    const breaks = daySchedule.breaks || [];
+
+    const bookings = await BookingModel.find({
+      barberId: new mongoose.Types.ObjectId(barberId),
+      bookingDate: { $gte: startOfDayUTC, $lte: endOfDayUTC },
+      bookingStatus: { $in: ["pending", "confirmed"] }
+    }).sort({ "timeSlot.startingTime": 1 }).lean();
+
+    const bookingSlots = bookings.map(b => {
+      const startIST = toISTHHMM(b.timeSlot.startingTime);
+      const endIST = toISTHHMM(b.timeSlot.endingTime);
+      const [sh, sm] = startIST.split(":").map(Number);
+      const [eh, em] = endIST.split(":").map(Number);
+      return { ...b, startTime: startIST, endTime: endIST, startMin: sh*60+sm, endMin: eh*60+em };
+    });
+
+    const breakSlots = breaks.map(br => ({
+      startMin: br.start,
+      endMin: br.end,
+      startTime: formatMinutes(br.start),
+      endTime: formatMinutes(br.end)
+    }));
+
+    const allSlots = [
+      ...bookingSlots.map(b => ({ startMin: b.startMin, endMin: b.endMin, type: "booking" })),
+      ...breakSlots.map(b => ({ ...b, type: "break" }))
+    ].sort((a,b) => a.startMin - b.startMin);
+
+    const freeSlots = [];
+    let currentPos = workStart;
+    for (const slot of allSlots) {
+      if (slot.startMin > currentPos) {
+        freeSlots.push({ from: formatMinutes(currentPos), to: formatMinutes(slot.startMin), minutes: slot.startMin - currentPos });
+      }
+      currentPos = Math.max(currentPos, slot.endMin);
+    }
+    if (currentPos < workEnd) {
+      freeSlots.push({ from: formatMinutes(currentPos), to: formatMinutes(workEnd), minutes: workEnd - currentPos });
+    }
+
+    const schedule = {
+      date: bookingDate,
+      workHours: { from: formatMinutes(workStart), to: formatMinutes(workEnd) },
+      breaks: breakSlots,
+      bookings: bookingSlots.map(b => ({ startTime: b.startTime, endTime: b.endTime, userId: b.userId, bookingStatus: b.bookingStatus })),
+      freeSlots
+    };
+
+    return { success: true, schedule };
+  } catch (err) {
+    console.error(err);
+    return { success: false, error: err.message };
   }
 };

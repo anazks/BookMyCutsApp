@@ -1,5 +1,5 @@
 const Decoder = require('../../TokenDecoder/Decoder')
-const {checkAvailble,bookNow,bookingCompletion,getBarberFreeTime} = require('../UseCause/BookingUseCause')
+const {checkAvailble,bookNow,bookingCompletion,getBarberFullSchedule} = require('../UseCause/BookingUseCause')
 const {mybooking,findDashboardIncomeFuncion} = require('../Repo/BookingRepo')
 const RazorPay = require('../../Razorpay/RazorpayConfig')
 const mongoose = require('mongoose');
@@ -163,9 +163,10 @@ const barberFreeSlots = async (req,res) => {
     try {
         const barberId = req.body.barberId
         const bookingDate = req.body.bookingDate
+        const shopId = req.body.shopId
         console.log(barberId)
         console.log(bookingDate)
-        const availableHours = await getBarberFreeTime(barberId,bookingDate)
+        const availableHours = await getBarberFullSchedule(barberId,bookingDate,shopId)
         if(availableHours){
             res.status(200).json({
                 success:true,
