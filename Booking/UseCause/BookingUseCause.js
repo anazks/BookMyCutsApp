@@ -139,31 +139,40 @@ function formatMinutes(min) {
   return `${h}:${m}`;
 }
 
-module.exports.getBarberFullSchedule = async (barberId, bookingDate,shopId) => {
+module.exports.getBarberFullSchedule = async (barberId, bookingDate, shopId) => {
   try {
     if (!mongoose.Types.ObjectId.isValid(shopId) || !mongoose.Types.ObjectId.isValid(barberId)) {
       return { success: false, message: "Invalid barberId or shopId" };
     }
 
-    const bookingDay = new Date(`${bookingDate}T00:00:00+05:30`);
-    const startOfDayUTC = new Date(bookingDay);
-    const endOfDayUTC = new Date(bookingDay);
-    endOfDayUTC.setHours(23, 59, 59, 999);
+    // === FIX 1: Correctly define the full day in IST using explicit +05:30 offset ===
+    const startOfDayIST = new Date(`${bookingDate}T00:00:00+05:30`);     // 00:00:00 IST
+    const endOfDayIST   = new Date(`${bookingDate}T23:59:59.999+05:30`); // 23:59:59.999 IST
+
+    // Optional: Log for debugging (remove in production)
+    // console.log("Query Range (UTC):", startOfDayIST.toISOString(), "→", endOfDayIST.toISOString());
 
     const workingHours = await WorkingHours.findOne({ shop: new mongoose.Types.ObjectId(shopId) }).lean();
     if (!workingHours) return { success: false, message: "Working hours not found for this shop" };
 
-    const dayOfWeek = bookingDay.getDay();
-    const daySchedule = workingHours.days.find(d => d.day === dayOfWeek);
-    if (!daySchedule || daySchedule.isClosed) return { success: false, message: "Shop is closed on this day" };
+    // === FIX 2: Calculate dayOfWeek correctly in IST (independent of server timezone) ===
+    const istOffsetMs = 5.5 * 60 * 60 * 1000; // +05:30 in milliseconds
+    const istTimeMs = startOfDayIST.getTime() + istOffsetMs;
+    const dayOfWeek = new Date(istTimeMs).getUTCDay(); // 0 = Sunday, 6 = Saturday
 
-    const workStart = daySchedule.open;
-    const workEnd = daySchedule.close;
+    const daySchedule = workingHours.days.find(d => d.day === dayOfWeek);
+    if (!daySchedule || daySchedule.isClosed) {
+      return { success: false, message: "Shop is closed on this day" };
+    }
+
+    const workStart = daySchedule.open;   // in minutes (e.g., 600 for 10:00)
+    const workEnd = daySchedule.close;    // in minutes (e.g., 1200 for 20:00)
     const breaks = daySchedule.breaks || [];
 
+    // === Use the fixed IST range in the query ===
     const bookings = await BookingModel.find({
       barberId: new mongoose.Types.ObjectId(barberId),
-      bookingDate: { $gte: startOfDayUTC, $lte: endOfDayUTC },
+      bookingDate: { $gte: startOfDayIST, $lte: endOfDayIST },
       bookingStatus: { $in: ["pending", "confirmed"] }
     }).sort({ "timeSlot.startingTime": 1 }).lean();
 
@@ -172,7 +181,13 @@ module.exports.getBarberFullSchedule = async (barberId, bookingDate,shopId) => {
       const endIST = toISTHHMM(b.timeSlot.endingTime);
       const [sh, sm] = startIST.split(":").map(Number);
       const [eh, em] = endIST.split(":").map(Number);
-      return { ...b, startTime: startIST, endTime: endIST, startMin: sh*60+sm, endMin: eh*60+em };
+      return {
+        ...b,
+        startTime: startIST,
+        endTime: endIST,
+        startMin: sh * 60 + sm,
+        endMin: eh * 60 + em
+      };
     });
 
     const breakSlots = breaks.map(br => ({
@@ -185,31 +200,45 @@ module.exports.getBarberFullSchedule = async (barberId, bookingDate,shopId) => {
     const allSlots = [
       ...bookingSlots.map(b => ({ startMin: b.startMin, endMin: b.endMin, type: "booking" })),
       ...breakSlots.map(b => ({ ...b, type: "break" }))
-    ].sort((a,b) => a.startMin - b.startMin);
+    ].sort((a, b) => a.startMin - b.startMin);
 
     const freeSlots = [];
     let currentPos = workStart;
     for (const slot of allSlots) {
       if (slot.startMin > currentPos) {
-        freeSlots.push({ from: formatMinutes(currentPos), to: formatMinutes(slot.startMin), minutes: slot.startMin - currentPos });
+        freeSlots.push({
+          from: formatMinutes(currentPos),
+          to: formatMinutes(slot.startMin),
+          minutes: slot.startMin - currentPos
+        });
       }
       currentPos = Math.max(currentPos, slot.endMin);
     }
     if (currentPos < workEnd) {
-      freeSlots.push({ from: formatMinutes(currentPos), to: formatMinutes(workEnd), minutes: workEnd - currentPos });
+      freeSlots.push({
+        from: formatMinutes(currentPos),
+        to: formatMinutes(workEnd),
+        minutes: workEnd - currentPos
+      });
     }
 
     const schedule = {
       date: bookingDate,
       workHours: { from: formatMinutes(workStart), to: formatMinutes(workEnd) },
       breaks: breakSlots,
-      bookings: bookingSlots.map(b => ({ startTime: b.startTime, endTime: b.endTime, userId: b.userId, bookingStatus: b.bookingStatus })),
+      bookings: bookingSlots.map(b => ({
+        startTime: b.startTime,
+        endTime: b.endTime,
+        userId: b.userId,
+        bookingStatus: b.bookingStatus
+      })),
       freeSlots
     };
 
     return { success: true, schedule };
+
   } catch (err) {
-    console.error(err);
+    console.error("Error in getBarberFullSchedule:", err);
     return { success: false, error: err.message };
   }
 };
