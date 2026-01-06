@@ -13,7 +13,8 @@ const bookingSchema = new mongoose.Schema({
   },
   shopId: {
     type: mongoose.Schema.Types.ObjectId,
-    ref:'shop'
+    ref:'shop',
+    required: true
   },
 
   serviceIds: [{

@@ -1,5 +1,5 @@
 const Decoder = require('../../TokenDecoder/Decoder')
-const {checkAvailble,bookNow,bookingCompletion,getBarberFullSchedule} = require('../UseCause/BookingUseCause')
+const {checkAvailble,bookNow,bookingCompletion,getBarberFullSchedule,getShopAvailableSlots} = require('../UseCause/BookingUseCause')
 const {mybooking,findDashboardIncomeFuncion} = require('../Repo/BookingRepo')
 const RazorPay = require('../../Razorpay/RazorpayConfig')
 const mongoose = require('mongoose');
@@ -189,8 +189,33 @@ const barberFreeSlots = async (req,res) => {
     }
 }
 
+const fetchAllAvailableTimeSlots = async (req,res) => {
+    try {
+        const shopId = req.body.shopId
+        const bookingDate  = req.body.bookingDate
+        console.log(shopId,bookingDate)
+        const availableSlots =await getShopAvailableSlots(shopId,bookingDate)
+        console.log("freeSlots:",availableSlots.schedule.freeSlots  )
+        if(availableSlots){
+            return res.status(200).json({
+                success:true,
+                message:"successfully fetch all time slots",
+                availableSlots
+            })
+        }
+            return res.status(404).json({
+            success:false,
+            message:"failed to fetch available time slots",
+        })
+    } catch (error) {
+        console.log(error)
+        res.status(500).json({
+            success:false,
+            message:"internal server error"
+        })
+    }
+}
 
-
-module.exports = {checkAvailability,AddBooking,getMybooking,createOrder,findDashboardIncome,verifyPayment,barberFreeSlots}
+module.exports = {checkAvailability,AddBooking,getMybooking,createOrder,findDashboardIncome,verifyPayment,barberFreeSlots,fetchAllAvailableTimeSlots}
 
 

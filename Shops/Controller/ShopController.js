@@ -37,6 +37,7 @@ const Decoder = require("../../TokenDecoder/Decoder");
 const { json } = require("express");
 const { convertToGeocode,findNearestShops } = require('../UseCase/useCaseShop');
 const { TrunkContextImpl } = require("twilio/lib/rest/routes/v2/trunk");
+const ShopModel = require("../Model/ShopModel");
 
 const AddShop = asyncHandler(async (req, res) => {
     const data = req.body;
@@ -894,8 +895,82 @@ const updateMediaDetails = async (req, res) => {
 };
 
 
+async function geocodeTextToCoords(text) {
+  const res = await fetch(
+    `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(text)}&format=json&limit=1`
+  );
+
+  const data = await res.json();
+  if (!data.length) return null;
+
+  return {
+    lat: parseFloat(data[0].lat),
+    lng: parseFloat(data[0].lon),
+    place: data[0].display_name
+  };
+}
+
+const search = async (req,res) => {
+    try {
+    const q = (req.query.q || "").trim();
+    if (!q) {
+      return res.status(400).json({ message: "Search text required" });
+  }
+    const shops = await ShopModel.find({ShopName:{ $regex: q,$options: "i"}})
+    if(shops.length > 0){
+        return res.status(200).json({
+            success:true,
+            message:"successfully fetch shops",
+            shops 
+        })
+    }
+     const coords = await geocodeTextToCoords(q); // frontend OR backend
+     const { lat, lng } = coords;
+     console.log(lat,lng)
+
+
+  if (!coords) {
+    return res.json({ mode: "none", shops: [] });
+  }
+
+   const nearByshops = await ShopModel.find({
+     ExactLocationCoord: {
+    $near: {
+      $geometry: {
+        type: "Point",
+        coordinates: [lng, lat]   // IMPORTANT → [lng, lat]
+      },
+      $maxDistance: 10000 // meters
+    }
+  }
+  });
+  console.log(nearByshops)
+  if(nearByshops.length > 0){
+    return res.status(200).json({
+        success:true,
+        message:"successfully fetch shops",
+        nearByshops
+    })
+  }else{
+     res.status(404).json({
+        success:true,
+        message:"failed to fetch shops",
+     })
+  }
+
+    } catch (error) {
+       console.log(error) 
+       res.status(500).json({
+        success:true,
+        message:"internal server error"
+       })
+    }
+}
+
+
 
 module.exports = {
+    search,
     updateMediaDetails,
     deleteMedia,
     addProfileImage,

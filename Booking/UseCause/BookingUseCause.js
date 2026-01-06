@@ -1,9 +1,10 @@
 const BookingModel = require('../Models/BookingModel');
+const BarberModel = require('../../Shops/Model/BarbarModel')
 const {checkBookings,addBookings,updateBooking,isSlotConflicting} = require('../Repo/BookingRepo')
 const WorkingHours = require('../../Shops/Model/WorkingHours')
 const mongoose = require('mongoose');
 
-module.exports.checkAvailable = async (data) => {
+module.exports.checkAvailable = async (data) => { 
     try {
         let checkByDate = data.Date
         let available = await checkBookings(checkByDate)
@@ -13,10 +14,6 @@ module.exports.checkAvailable = async (data) => {
         return false;
     }
 };
-
-
-
-
 
 
 module.exports.bookNow = async (data, decodedValue) => {
@@ -239,6 +236,151 @@ module.exports.getBarberFullSchedule = async (barberId, bookingDate, shopId) => 
 
   } catch (err) {
     console.error("Error in getBarberFullSchedule:", err);
+    return { success: false, error: err.message };
+  }
+};
+
+module.exports.getShopAvailableSlots = async (shopId, bookingDate) => {
+  try {
+    if (!mongoose.Types.ObjectId.isValid(shopId)) {
+      return { success: false, message: "Invalid shopId" };
+    }
+
+    // Input date is YYYY-MM-DD (e.g., "2026-01-01")
+    const startOfDayUTC = new Date(`${bookingDate}T00:00:00.000Z`);
+    const endOfDayUTC = new Date(`${bookingDate}T23:59:59.999Z`);
+
+    // ---- Get shop working hours ----
+    console.log("shopId",shopId)
+    const workingHours = await WorkingHours.findOne({ shop: new mongoose.Types.ObjectId(shopId) }).lean();
+    console.log("working hours:",workingHours)
+
+    if (!workingHours) {
+      return { success: false, message: "Working hours not found" };
+    }
+
+    // Determine day of week in IST (India uses IST = UTC+5:30)
+    const dayOfWeek = new Date(startOfDayUTC.getTime() + 5.5 * 60 * 60 * 1000).getUTCDay();
+
+    const daySchedule = workingHours.days.find(d => d.day === dayOfWeek);
+    if (!daySchedule || daySchedule.isClosed) {
+      return {
+        success: true,
+        schedule: {
+          date: bookingDate,
+          workHours: { from: "closed", to: "closed" },
+          breaks: [],
+          bookings: [],
+          freeSlots: []
+        }
+      };
+    }
+
+    const workStartMin = daySchedule.open;   // e.g., 540 for 09:00
+    const workEndMin   = daySchedule.close;  // e.g., 1020 for 17:00
+    const breaks = daySchedule.breaks || [];
+
+    const breakSlots = breaks.map(br => ({
+      startMin: br.start,
+      endMin: br.end
+    }));
+
+    // ---- Fetch ALL relevant bookings for this shop and date ----
+    const bookings = await BookingModel.find({
+      shopId: new mongoose.Types.ObjectId(shopId),
+      bookingDate: { $gte: startOfDayUTC, $lte: endOfDayUTC },
+      bookingStatus: { $in: ["pending", "confirmed"] }
+    })
+      .sort({ "timeSlot.startingTime": 1 }) // Critical: Sort by start time
+      .lean();
+
+    console.log(`Found ${bookings.length} bookings for ${bookingDate}`);
+
+    // ---- Convert booking times to minutes since midnight (in IST) ----
+    const bookingSlots = bookings.map(booking => {
+      // timeSlot.startingTime and endingTime are stored as UTC Date objects
+      const startLocal = new Date(booking.timeSlot.startingTime);
+      const endLocal = new Date(booking.timeSlot.endingTime);
+
+      // Convert to IST minutes
+      const startMin = startLocal.getUTCHours() * 60 + startLocal.getUTCMinutes();
+      const endMin = endLocal.getUTCHours() * 60 + endLocal.getUTCMinutes();
+
+      return { startMin, endMin };
+    });
+
+    // ---- Combine and SORT all busy periods (bookings + breaks) ----
+    let busySlots = [...bookingSlots, ...breakSlots];
+    busySlots.sort((a, b) => a.startMin - b.startMin);
+
+    // ---- Merge overlapping or adjacent busy slots ----
+    const mergedBusySlots = [];
+    for (const slot of busySlots) {
+      if (mergedBusySlots.length === 0 || mergedBusySlots[mergedBusySlots.length - 1].endMin < slot.startMin) {
+        mergedBusySlots.push({ ...slot });
+      } else {
+        // Overlap or adjacent: extend the last slot
+        mergedBusySlots[mergedBusySlots.length - 1].endMin = Math.max(
+          mergedBusySlots[mergedBusySlots.length - 1].endMin,
+          slot.endMin
+        );
+      }
+    }
+
+    // ---- Calculate free slots within working hours ----
+    const freeSlots = [];
+    let currentPos = workStartMin;
+
+    for (const busy of mergedBusySlots) {
+      if (busy.startMin > currentPos) {
+        freeSlots.push({
+          from: formatMinutes(currentPos),
+          to: formatMinutes(busy.startMin),
+          minutes: busy.startMin - currentPos
+        });
+      }
+      currentPos = Math.max(currentPos, busy.endMin);
+    }
+
+    // Add final free slot if any time left till closing
+    if (currentPos < workEndMin) {
+      freeSlots.push({
+        from: formatMinutes(currentPos),
+        to: formatMinutes(workEndMin),
+        minutes: workEndMin - currentPos
+      });
+    }
+
+    // ---- Return in the exact format you want ----
+    return {
+      success: true,
+      schedule: {
+        date: bookingDate,
+        workHours: {
+          from: formatMinutes(workStartMin),
+          to: formatMinutes(workEndMin)
+        },
+        breaks: breaks.map(b => ({
+          startMin: b.start,
+          endMin: b.end,
+          startTime: formatMinutes(b.start),
+          endTime: formatMinutes(b.end)
+        })),
+        bookings: bookings.map(b => ({
+          barberId: b.barberId,
+          timeSlot: {
+            startingTime: new Date(b.timeSlot.startingTime).toISOString(),
+            endingTime: new Date(b.timeSlot.endingTime).toISOString()
+          },
+          totalPrice: b.totalPrice,
+          bookingStatus: b.bookingStatus
+        })),
+        freeSlots
+      }
+    };
+
+  } catch (err) {
+    console.error("Error in getShopAvailableSlots:", err);
     return { success: false, error: err.message };
   }
 };

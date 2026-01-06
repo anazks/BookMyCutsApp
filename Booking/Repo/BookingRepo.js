@@ -19,7 +19,7 @@ module.exports.addBookings = async(data)=>{
     }
 }
 
-module.exports.isSlotConflicting = async (
+module.exports. isSlotConflicting = async (
   barberId,
   bookingDate,
   startDateTime,
@@ -37,7 +37,7 @@ module.exports.isSlotConflicting = async (
     "timeSlot.endingTime": { $gt: startDateTime }
   });
 
-  console.log(conflict, "already bookings");
+  console.log(conflict, "already bookings");  
   return !!conflict;
 };
 
