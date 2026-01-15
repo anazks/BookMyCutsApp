@@ -6,6 +6,7 @@ const mongoose = require('mongoose');
 const { trace } = require('../Router/BookingRouter');
 const crypto = require('crypto'); // CommonJS
 const BookingModel = require('../Models/BookingModel');
+const shopModel = require('../../Shops/Model/ShopModel')
  
 
 const nodemailer = require('nodemailer');
@@ -229,10 +230,14 @@ const fetchUpComeingBooking = async (req,res) => {
         console.log("userid:",userId)
         const booking = await upcomingBooking(userId)
         if(booking){
+            console.log(booking,"upcoming booking found")
+            let shopDetails = await shopModel.findById(booking.shopId)
+            console.log(shopDetails,"shop details") 
             res.status(200).json({
                 success:true,
                 message:"succesfully fetched upcominbooking",
-                booking
+                booking,
+                shopDetails
             })
         }else{
             res.status(404).json({
@@ -278,7 +283,7 @@ const findShopByService = async (req,res) => {
 const sendConfirmationMail = async (bookingId, email) => {
   try {
     const booking = await BookingModel.findById(bookingId);
-
+    console.log(email, 'Booking details for email');
     if (!booking) {
       throw new Error('Booking not found');
     }
@@ -290,13 +295,13 @@ const sendConfirmationMail = async (bookingId, email) => {
     const transporter = nodemailer.createTransport({
       service: 'gmail',
       auth: {
-        user: 'govindjayakumar858@gmail.com',
-        pass: 'hchvyofxmtmuqqfs' // app password (no spaces)
+        user: 'anazksunil2@gmail.com',
+        pass: 'gefd cyst feti eztk' // app password (no spaces)
       }
     });
 
     const mailOptions = {
-      from: '"BookMyCuts" <govindjayakumar858@gmail.com>',
+      from: '"BookMyCuts" <anazksunil2@gmail.com>',
       to: email,
       subject: 'Booking Confirmation – BookMyCuts',
       html: `
