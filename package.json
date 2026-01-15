@@ -23,7 +23,7 @@
     "mongoose": "^8.2.2",
     "multer": "^2.0.2",
     "node-cron": "^4.2.1",
-    "nodemailer": "^7.0.6",
+    "nodemailer": "^7.0.12",
     "razorpay": "^2.9.6",
     "streamifier": "^0.1.1",
     "swagger-jsdoc": "^6.2.8",

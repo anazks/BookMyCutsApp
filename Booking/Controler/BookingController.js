@@ -1,10 +1,16 @@
 const Decoder = require('../../TokenDecoder/Decoder')
 const {checkAvailble,bookNow,bookingCompletion,getBarberFullSchedule,getShopAvailableSlots} = require('../UseCause/BookingUseCause')
-const {mybooking,findDashboardIncomeFuncion} = require('../Repo/BookingRepo')
+const {mybooking,findDashboardIncomeFuncion,upcomingBooking} = require('../Repo/BookingRepo')
 const RazorPay = require('../../Razorpay/RazorpayConfig')
 const mongoose = require('mongoose');
 const { trace } = require('../Router/BookingRouter');
 const crypto = require('crypto'); // CommonJS
+const BookingModel = require('../Models/BookingModel');
+ 
+
+const nodemailer = require('nodemailer');
+
+
 
 const checkAvailability = async(req,res)=>{
     try {
@@ -59,7 +65,8 @@ const verifyPayment = async (req, res) => {
             razorpay_signature,
             paymentType,
             amount,
-            bookingId
+            bookingId,
+            email
         } = req.body;
         let Details = req.body
 
@@ -91,6 +98,7 @@ const verifyPayment = async (req, res) => {
             
             let response = await bookingCompletion(Details)
             console.log(response,"booking controller response after pay")
+            await sendConfirmationMail(bookingId,email)
             return res.status(200).json({
             success: true,
             message: 'Payment verification successful',
@@ -195,7 +203,6 @@ const fetchAllAvailableTimeSlots = async (req,res) => {
         const bookingDate  = req.body.bookingDate
         console.log(shopId,bookingDate)
         const availableSlots =await getShopAvailableSlots(shopId,bookingDate)
-        console.log("freeSlots:",availableSlots.schedule.freeSlots  )
         if(availableSlots){
             return res.status(200).json({
                 success:true,
@@ -216,6 +223,108 @@ const fetchAllAvailableTimeSlots = async (req,res) => {
     }
 }
 
-module.exports = {checkAvailability,AddBooking,getMybooking,createOrder,findDashboardIncome,verifyPayment,barberFreeSlots,fetchAllAvailableTimeSlots}
+const fetchUpComeingBooking = async (req,res) => {
+    try {
+        const userId = req.params.id
+        console.log("userid:",userId)
+        const booking = await upcomingBooking(userId)
+        if(booking){
+            res.status(200).json({
+                success:true,
+                message:"succesfully fetched upcominbooking",
+                booking
+            })
+        }else{
+            res.status(404).json({
+                success:false,
+                message:"faild to fetch booking"
+            })
+        }
+    } catch (error) {
+        console.log(error)
+        res.status(500).json({
+            success:false,
+            message:"internal server error"
+        })
+    }
+}
+
+const findShopByService = async (req,res) => {
+    try {
+        const {coordinates,service} = req.body
+        const shops =  await  findShopByServiceFunction(coordinates,service)
+        if(shops){
+            res.status(200).josn({
+                success:true,
+                message:"successfully fetched shops by servie and location",
+                shops
+            })
+        }else{
+            res.status(404).json({
+                success:false, 
+                message:"failed to fetch shops",
+            })
+        }
+    } catch (error) {
+        console.error(error)
+        res.status(500).json({
+            success:false,
+            message:"internal server error"
+        })
+    }
+}
+
+
+const sendConfirmationMail = async (bookingId, email) => {
+  try {
+    const booking = await BookingModel.findById(bookingId);
+
+    if (!booking) {
+      throw new Error('Booking not found');
+    }
+
+    const { bookingDate, timeSlot } = booking;
+    const start = timeSlot.startingTime;
+    const end = timeSlot.endingTime;
+
+    const transporter = nodemailer.createTransport({
+      service: 'gmail',
+      auth: {
+        user: 'govindjayakumar858@gmail.com',
+        pass: 'hchvyofxmtmuqqfs' // app password (no spaces)
+      }
+    });
+
+    const mailOptions = {
+      from: '"BookMyCuts" <govindjayakumar858@gmail.com>',
+      to: email,
+      subject: 'Booking Confirmation – BookMyCuts',
+      html: `
+        <h2>Booking Confirmed ✂️</h2>
+        <p>Hello,</p>
+
+        <p>Your appointment has been <strong>successfully confirmed</strong>.</p>
+
+        <p><strong>📅 Date:</strong> ${bookingDate}</p>
+        <p><strong>⏰ Time:</strong> ${start} - ${end}</p>
+
+        <p>Please arrive 10 minutes early.</p>
+
+        <p>Thank you for choosing <strong>BookMyCuts</strong>.</p>
+
+        <br />
+        <p>Regards,<br/>BookMyCuts Team</p>
+      `
+    };
+
+    await transporter.sendMail(mailOptions);
+    console.log('✅ Confirmation email sent to:', email);
+
+  } catch (error) {
+    console.error('❌ Error sending confirmation email:', error.message);
+  }
+};
+
+module.exports = {findShopByService,fetchUpComeingBooking,checkAvailability,AddBooking,getMybooking,createOrder,findDashboardIncome,verifyPayment,barberFreeSlots,fetchAllAvailableTimeSlots}
 
 

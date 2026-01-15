@@ -16,9 +16,53 @@ module.exports.checkAvailable = async (data) => {
 };
 
 
+const assignBarber = async (startTime, endTime, bookingDate, shopId) => {
+  // 1️⃣ Find all bookings that overlap with this time slot
+  const overlappingBookings = await BookingModel.find({
+    shopId: new mongoose.Types.ObjectId(shopId),
+    bookingDate: bookingDate,
+    bookingStatus: { $in: ["pending", "confirmed"] },
+
+    // TIME OVERLAP CONDITION
+    $or: [
+      {
+        "timeSlot.startingTime": { $lt: endTime },
+        "timeSlot.endingTime": { $gt: startTime }
+      }
+    ]
+  }).select("barberId");
+
+  // 2️⃣ Extract busy barber IDs
+  const busyBarberIds = overlappingBookings.map(
+    b => b.barberId.toString()
+  );
+
+  // 3️⃣ Fetch all barbers of the shop
+  const shopBarbers = await BarberModel.find({
+    shopId: new mongoose.Types.ObjectId(shopId)
+  });
+
+  // 4️⃣ Filter free barbers
+  const freeBarbers = shopBarbers.filter(
+    barber => !busyBarberIds.includes(barber._id.toString())
+  );
+
+  // 5️⃣ No barber available
+  if (freeBarbers.length === 0) {
+    throw new Error("No barber available for selected time slot");
+  }
+
+  // 6️⃣ Assign barber (simple strategy)
+  return freeBarbers[0]; // later you can change strategy
+};
+
+
+
 module.exports.bookNow = async (data, decodedValue) => {
   try {
     data.userId = decodedValue.id;
+
+    console.log("BOOKING DATA FROM FRONTEND:",data)
 
     // ✅ Extract dates directly from request
       const startTime = new Date(data.timeSlot.startingTime);
@@ -40,6 +84,19 @@ module.exports.bookNow = async (data, decodedValue) => {
     if (hasConflict) {
       throw new Error("This time slot is already booked by someone else.");
     }
+
+
+    if (!data.barberId) {
+  const barber = await assignBarber(
+    startTime,
+    endTime,
+    data.bookingDate,
+    data.shopId
+  );
+
+  data.barberId = barber._id; // 🔥 THIS WAS MISSING
+  console.log("ASSIGNED BARBER ID:", data.barberId);
+}
 
     // --- STEP 2: PREPARE BOOKING DATA ---
     const bookingData = {
@@ -84,6 +141,7 @@ module.exports.bookNow = async (data, decodedValue) => {
 
       createdAt: new Date()
     };
+    console.log("BOOKING DATA -",bookingData)
 
     // --- STEP 3: SAVE ---
     const newBooking = await addBookings(bookingData);

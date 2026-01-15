@@ -371,3 +371,37 @@ exports.updateMediaDetailsFunction = async (mediaId, title, description) => {
     throw error;
   }
 };
+
+module.exports.getUniqueService = async () => {
+    try {
+        const uniqueServices = await ServiceModel.distinct("ServiceName");
+        return uniqueServices
+    } catch (error) {
+        console.log(error)
+    }
+}
+  
+module.exports.filterShopsByServiceFunction = async (shopIds, serviceName) => {
+  try {
+    // 1️⃣ Find matching services
+    const services = await ServiceModel.find({
+      ServiceName: { $regex: `^${serviceName}$`, $options: "i" },
+      shopId: { $in: shopIds } // shopId is STRING in your schema
+    }).select("shopId");
+
+    // 2️⃣ Extract unique shopIds
+    const matchedShopIds = [...new Set(services.map(s => s.shopId))];
+
+    if (matchedShopIds.length === 0) return [];
+
+    // 3️⃣ Fetch shops
+    const shops = await ShopModel.find({
+      _id: { $in: matchedShopIds }
+    });
+    console.log("FILTER SHOPS:",shops)
+    return shops;
+  } catch (error) {
+    console.error("filterShopsByServiceFunction error:", error);
+    throw error;
+  }
+};

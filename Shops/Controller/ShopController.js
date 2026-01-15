@@ -2,6 +2,7 @@ const asyncHandler = require("express-async-handler");
 const jwt = require('jsonwebtoken');
 const  SaveProfileToCloud  = require('../CloudStorageCurds/SaveProfileToCloude')
 const secretkey = process.env.secretKey;
+const ServiceModel = require('../Model/ServiceModel')
 
 const {
     updateBankDetailsFunction,
@@ -31,7 +32,9 @@ const {
     deleteShopFuntion,
     findNearbyShopsFunction,
     deleteMediaFile,
-    updateMediaDetailsFunction
+    updateMediaDetailsFunction,
+    getUniqueService,
+    filterShopsByServiceFunction
 } = require('../Repo/ShopRepo');
 const Decoder = require("../../TokenDecoder/Decoder");
 const { json } = require("express");
@@ -765,6 +768,9 @@ const editService = async (req,res) => {
 const findNearByShops = async (req,res) => {
     try {
         const {lng,lat} = req.query
+        console.log("COORDINATES")
+        console.log(lng,"lng")
+        console.log(lat,"lat")
         const shops = await findNearestShops(lng,lat)
         if(shops.length > 0){
           return  res.status(200).json({
@@ -910,66 +916,126 @@ async function geocodeTextToCoords(text) {
   };
 }
 
-const search = async (req,res) => {
+const search = async (req, res) => {
     try {
-    const q = (req.query.q || "").trim();
-    if (!q) {
-      return res.status(400).json({ message: "Search text required" });
-  }
-    const shops = await ShopModel.find({ShopName:{ $regex: q,$options: "i"}})
-    if(shops.length > 0){
-        return res.status(200).json({
-            success:true,
-            message:"successfully fetch shops",
-            shops 
-        })
-    }
-     const coords = await geocodeTextToCoords(q); // frontend OR backend
-     const { lat, lng } = coords;
-     console.log(lat,lng)
+        const q = (req.query.q || "").trim();
+        if (!q) {
+            return res.status(400).json({ message: "Search text required" });
+        }
 
+        // 1. Try finding by name first
+        let shops = await ShopModel.find({
+            ShopName: { $regex: q, $options: "i" }
+        });
 
-  if (!coords) {
-    return res.json({ mode: "none", shops: [] });
-  }
+        // 2. If no shops found by name, try Geocoding
+        if (shops.length === 0) {
+            const coords = await geocodeTextToCoords(q);
+            
+            if (coords) {
+                const { lat, lng } = coords;
+                // Overwrite the 'shops' variable with the nearby results
+                shops = await ShopModel.find({
+                    ExactLocationCoord: {
+                        $near: {
+                            $geometry: {
+                                type: "Point",
+                                coordinates: [lng, lat]
+                            },
+                            $maxDistance: 10000 
+                        }
+                    }
+                });
+            }
+        }
 
-   const nearByshops = await ShopModel.find({
-     ExactLocationCoord: {
-    $near: {
-      $geometry: {
-        type: "Point",
-        coordinates: [lng, lat]   // IMPORTANT → [lng, lat]
-      },
-      $maxDistance: 10000 // meters
-    }
-  }
-  });
-  console.log(nearByshops)
-  if(nearByshops.length > 0){
-    return res.status(200).json({
-        success:true,
-        message:"successfully fetch shops",
-        nearByshops
-    })
-  }else{
-     res.status(404).json({
-        success:true,
-        message:"failed to fetch shops",
-     })
-  }
+        // 3. Final Response (Unified variable name)
+        if (shops.length > 0) {
+            return res.status(200).json({
+                success: true,
+                message: "successfully fetch shops",
+                shops // This will now contain either Name matches OR Nearby matches
+            });
+        } else {
+            return res.status(404).json({
+                success: false, // Changed to false for better logic
+                message: "failed to fetch shops",
+                shops: [] // Return empty array to prevent frontend map errors
+            });
+        }
 
     } catch (error) {
-       console.log(error) 
-       res.status(500).json({
-        success:true,
-        message:"internal server error"
-       })
+        console.error(error);
+        res.status(500).json({
+            success: false,
+            message: "internal server error"
+        });
     }
 }
 
+const fetchAllUniqueService = async (req,res) => {
+  try {
+    const service = await getUniqueService()
+    if(service){
+        res.status(200).json({
+            success:true,
+            message:"successfull fetch service",
+            service
+        })
+    }else{
+        res.status(404).json({
+            success:true,
+            message:"failed to fetch service"
+        })
+    }
+  } catch (error) {
+    console.log(error)
+  }
+}
+
+const filterShopsByService = async (req, res) => {
+  try {
+    console.log(req.body)
+    const { shopIds, serviceName } = req.body;
+
+    if (!shopIds?.length || !serviceName) {
+      return res.status(400).json({
+        success: false,
+        message: "shopIds and serviceName are required"
+      });
+    }
+
+    const shops = await filterShopsByServiceFunction(shopIds, serviceName);
+
+    return res.status(200).json({
+      success: true,
+      count: shops.length,
+      shops
+    });
+
+  } catch (error) {
+    console.error("filterShopsByService error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Server error"
+    });
+  }
+};
+
+const viewAllService = async (req,res) => {
+  try {
+     const service = await ServiceModel.find({})
+     res.json(service)
+  } catch (error) {
+    console.log(error)
+  }
+}
 
 
 module.exports = {
+    viewAllService,
+    filterShopsByService,
+    fetchAllUniqueService,
     search,
     updateMediaDetails,
     deleteMedia,

@@ -1,17 +1,47 @@
 const workingHoursRepo = require("../Repo/WorkingHoursRepo");
 
 // Helper function: convert "HH:MM" to minutes from midnight
-const timeToMinutes = (timeStr) => {
-  if (!timeStr) return null;
-  const [hours, minutes] = timeStr.split(":").map(Number);
+function timeToMinutes(timeStr) {
+  if (!timeStr || typeof timeStr !== 'string') return null;
+
+  const str = timeStr.trim().toUpperCase().replace(/\s+/g, '');
+
+  // Try to match common patterns
+  const match24 = str.match(/^(\d{1,2}):?(\d{2})$/);
+  const match12 = str.match(/^(\d{1,2})(?::(\d{2}))?(AM|PM)$/);
+
+  let hours, minutes = 0;
+
+  if (match24) {
+    hours = parseInt(match24[1], 10);
+    minutes = parseInt(match24[2] || '0', 10);
+  } 
+  else if (match12) {
+    hours = parseInt(match12[1], 10);
+    minutes = parseInt(match12[2] || '0', 10);
+    const period = match12[3];
+
+    if (period === 'PM' && hours !== 12) hours += 12;
+    if (period === 'AM' && hours === 12) hours = 0;
+  } 
+  else {
+    console.warn(`Cannot parse time: "${timeStr}"`);
+    return null;
+  }
+
+  if (isNaN(hours) || isNaN(minutes) || hours > 23 || minutes > 59) {
+    return null;
+  }
+
   return hours * 60 + minutes;
-};
+}
 
 // -------------------------
 // CREATE Working Hours
 // -------------------------
 module.exports.createWorkingHours = async (req, res) => {
   try {
+    console.log("FRONTEND REQUEST DATA",req.body)
     const { shopId, days } = req.body;
 
     if (!shopId || !days || !Array.isArray(days) || days.length === 0) {
@@ -93,7 +123,7 @@ module.exports.updateWorkingHours = async (req, res) => {
   try {
     const { shopId, day, open, close, breaks, isClosed } = req.body;
 
-    if (!shopId || day === undefined) {
+    if (!shopId) {
       return res.status(400).json({
         success: false,
         message: "shopId and day are required",

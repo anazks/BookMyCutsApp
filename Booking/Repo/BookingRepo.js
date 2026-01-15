@@ -181,3 +181,21 @@ module.exports.updateBooking = async ({
     throw error;
   }
 };
+
+module.exports.upcomingBooking = async (userId) => {
+  try {
+    const upcomingBooking = await BookingModel
+      .findOne({
+        userId: new mongoose.Types.ObjectId(userId),
+        'timeSlot.startingTime': { $gt: new Date() },  // Start time > now (UTC comparison)
+        bookingStatus: { $in: ['confirmed', 'pending'] }
+      })
+      .sort({ 'timeSlot.startingTime': 1 })  // Earliest upcoming first
+      .lean();  // Optional: for better performance
+
+    return upcomingBooking;
+  } catch (error) {
+    console.error('Error fetching upcoming booking:', error);
+    return null;
+  }
+};
