@@ -42,107 +42,225 @@ module.exports. isSlotConflicting = async (
 };
 
 
-module.exports.mybooking = async(userId)=>{
-    try {
-        let bookings = await BookingModel.find({userId: userId})
-        return bookings
-    } catch (error) {
-        console.log(error)
-        return error
-    }
-}
- 
-
-module.exports.findDashboardIncomeFuncion = async (shopId) => {
+module.exports.mybooking = async (userId) => {
   try {
-    // console.log(userId, "in findDashboardIncomeFuncion");
+    const bookings = await BookingModel.find({ userId })
+      .populate("shopId", "ShopName")
+      .populate("barberId", "BarberName");
+      // .populate("serviceId","ServiceName")
 
-    let now = new Date();
-    let lastWeekStart = new Date();
-    lastWeekStart.setDate(lastWeekStart.getDate() - 7);
-
-    let startOfDay = new Date();
-    startOfDay.setHours(0, 0, 0, 0);
-
-    let endOfDay = new Date();
-    endOfDay.setHours(23, 59, 59, 999);
-
-    let startOfMonth = new Date(now.getFullYear(),now.getMonth(),1)
-    let endOfMonth = new Date(now.getFullYear(),now.getMonth()+1,0,23,59,59,999);
-
-    let result = await BookingModel.aggregate([
-      {
-        $match: { shopId }
-      },
-      {
-        $facet: {
-          lastWeek: [
-            {
-              $match: {
-                bookingTimestamp: { $gte: lastWeekStart, $lte: endOfDay }
-              }
-            },
-            {
-              $group: {
-                _id: null,
-                total: { $sum: "$amountPaid" }
-              }
-            }
-          ],
-          today: [
-            {
-              $match: {
-                bookingTimestamp: { $gte: startOfDay, $lte: endOfDay }
-              }
-            },
-            {
-              $group: {
-                _id: null,
-                total: { $sum: "$amountPaid" }
-              }
-            }
-          ],
-          todayExpectedAmount: [
-            {
-              $match: {
-                bookingTimestamp: { $gte: startOfDay, $lte: endOfDay }
-              }
-            },
-            {
-              $group: {
-                _id: null,
-                total: { $sum: "$remainingAmount" } // changed from expectedAmount
-              }
-            }
-          ],
-          monthlyAmount: [
-            {
-              $match: {
-                bookingTimestamp: { $gte: startOfMonth, $lte: endOfMonth }
-              }
-            },
-            {
-              $group: {
-                _id: null,
-                total:{ $sum: "$amountPaid" }
-              }
-            }
-          ]
-        }
-      }
-    ]);
-
-    return {
-      lastWeek: result[0].lastWeek[0]?.total || 0,
-      today: result[0].today[0]?.total || 0,
-      todayExpectedAmount: result[0].todayExpectedAmount[0]?.total || 0,
-      monthlyAmount:result[0].monthlyAmount[0]?.total || 0
-    };
+    return bookings;
   } catch (error) {
-    console.error(error);
+    console.log(error);
+    throw error;
   }
 };
 
+ 
+
+module.exports.findDashboardIncomeFunction = async (shopId) => {
+  console.log('🔍 [DASHBOARD] Starting income calc for shopId:', shopId);
+  
+  if (!mongoose.Types.ObjectId.isValid(shopId)) {
+    console.error('❌ [DASHBOARD] Invalid shop ID:', shopId);
+    throw new Error('Invalid shop ID');
+  }
+
+  try {
+    const now = new Date();
+    console.log('📅 [DASHBOARD] Current time (IST):', now.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }));
+    
+    // Today boundaries
+    const startOfToday = new Date(now);
+    startOfToday.setHours(0, 0, 0, 0);
+    const endOfToday = new Date(now);
+    endOfToday.setHours(23, 59, 59, 999);
+    
+    console.log('🕐 [DASHBOARD] Today range:', startOfToday.toISOString(), '→', endOfToday.toISOString());
+
+    // Last 7 days
+    const startOfLast7Days = new Date(startOfToday);
+    startOfLast7Days.setDate(startOfLast7Days.getDate() - 6);
+    console.log('📊 [DASHBOARD] Last 7 days start:', startOfLast7Days.toISOString());
+
+    // This month
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    console.log('📈 [DASHBOARD] Month start:', startOfMonth.toISOString());
+
+    const baseQuery = {
+      shopId: new mongoose.Types.ObjectId(shopId),
+      bookingStatus: { $in: ['confirmed', 'completed'] }
+    };
+
+    // ❌ DEBUG: Total bookings for shop (ignore status/date)
+    const totalBookings = await BookingModel.countDocuments({ shopId: new mongoose.Types.ObjectId(shopId) });
+    console.log('📋 [DASHBOARD] TOTAL bookings for shop:', totalBookings);
+
+    // ❌ DEBUG: Bookings matching baseQuery (status filter)
+    const validStatusBookings = await BookingModel.countDocuments(baseQuery);
+    console.log('✅ [DASHBOARD] Valid status bookings:', validStatusBookings);
+
+    if (totalBookings === 0) {
+      console.log('🚫 [DASHBOARD] NO bookings exist for this shop. All zeros expected.');
+      return { last7Days: 0, todayReceived: 0, todayExpectedRemaining: 0, todayTotalPotential: 0, thisMonthReceived: 0, currency: '₹' };
+    }
+
+    // 1. Today received
+    console.log('🔎 [DASHBOARD] Querying today received...');
+    const todayReceivedDocs = await BookingModel.find({
+      ...baseQuery,
+      bookingTimestamp: { $gte: startOfToday, $lte: endOfToday }
+    }).select('amountPaid bookingTimestamp bookingStatus').limit(5); // limit for log
+
+    console.log('📄 [DASHBOARD] Today received docs count:', todayReceivedDocs.length);
+    todayReceivedDocs.forEach((doc, i) => {
+      console.log(`  → Doc ${i}: amountPaid=${doc.amountPaid}, timestamp=${doc.bookingTimestamp}, status=${doc.bookingStatus}`);
+    });
+
+    const todayReceived = todayReceivedDocs.reduce((sum, doc) => sum + (doc.amountPaid || 0), 0);
+
+    // 2. Today expected remaining
+    console.log('🔎 [DASHBOARD] Querying today expected...');
+    const todayExpectedDocs = await BookingModel.find({
+      ...baseQuery,
+      bookingDate: { $gte: startOfToday, $lte: endOfToday },
+      remainingAmount: { $gt: 0 }
+    }).select('remainingAmount bookingDate bookingStatus').limit(5);
+
+    console.log('📄 [DASHBOARD] Today expected docs count:', todayExpectedDocs.length);
+    todayExpectedDocs.forEach((doc, i) => {
+      console.log(`  → Doc ${i}: remaining=${doc.remainingAmount}, bookingDate=${doc.bookingDate}, status=${doc.bookingStatus}`);
+    });
+
+    const todayExpectedRemaining = todayExpectedDocs.reduce((sum, doc) => sum + (doc.remainingAmount || 0), 0);
+
+    // 3. Last 7 days
+    console.log('🔎 [DASHBOARD] Querying last 7 days...');
+    const last7DaysDocs = await BookingModel.find({
+      ...baseQuery,
+      bookingTimestamp: { $gte: startOfLast7Days, $lte: endOfToday }
+    }).select('amountPaid').limit(5);
+
+    console.log('📄 [DASHBOARD] Last 7 days docs count:', last7DaysDocs.length);
+    const last7Days = last7DaysDocs.reduce((sum, doc) => sum + (doc.amountPaid || 0), 0);
+
+    // 4. This month
+    console.log('🔎 [DASHBOARD] Querying this month...');
+    const thisMonthDocs = await BookingModel.find({
+      ...baseQuery,
+      bookingTimestamp: { $gte: startOfMonth }
+    }).select('amountPaid').limit(5);
+
+    console.log('📄 [DASHBOARD] This month docs count:', thisMonthDocs.length);
+    const thisMonthReceived = thisMonthDocs.reduce((sum, doc) => sum + (doc.amountPaid || 0), 0);
+
+    const result = {
+      last7Days: Math.round(last7Days),
+      todayReceived: Math.round(todayReceived),
+      todayExpectedRemaining: Math.round(todayExpectedRemaining),
+      todayTotalPotential: Math.round(todayReceived + todayExpectedRemaining),
+      thisMonthReceived: Math.round(thisMonthReceived),
+      currency: '₹',
+      debug: {
+        totalBookings,
+        validStatusBookings,
+        todayDocsCount: todayReceivedDocs.length,
+        expectedDocsCount: todayExpectedDocs.length
+      }
+    };
+
+    console.log('✅ [DASHBOARD] Final result:', JSON.stringify(result, null, 2));
+    return result;
+
+  } catch (error) {
+    console.error('💥 [DASHBOARD] ERROR:', error);
+    throw error;
+  }
+};
+ 
+
+// module.exports.getShopIncomeStats = async (shopId) => {
+//   if (!mongoose.isValidObjectId(shopId)) {
+//     throw new Error('Invalid shopId');
+//   }
+
+//   const today = new Date();
+//   today.setHours(0, 0, 0, 0);
+
+//   const tomorrow = new Date(today);
+//   tomorrow.setDate(tomorrow.getDate() + 1);
+
+//   // Week starts from Sunday (common in India/business)
+//   // Change to Monday start if needed: + (today.getDay() === 0 ? -6 : 1 - today.getDay())
+//   const startOfWeek = new Date(today);
+//   startOfWeek.setDate(today.getDate() - today.getDay());
+
+//   const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+
+//   const match = {
+//     shopId: new mongoose.Types.ObjectId(shopId),
+//     bookingStatus: { $in: ['confirmed', 'completed'] },
+//     paymentStatus: { $in: ['partial', 'paid'] }
+//   };
+
+//   const result = await Booking.aggregate([
+//     { $match: match },
+//     {
+//       $facet: {
+//         // Money actually received TODAY
+//         todayReceived: [
+//           { $match: { createdAt: { $gte: today, $lt: tomorrow } } },
+//           { $group: { _id: null, total: { $sum: '$amountPaid' } } }
+//         ],
+
+//         // Expected remaining amount from TODAY's bookings (COD / advance / partial)
+//         todayExpectedRemaining: [
+//           { $match: { bookingDate: { $gte: today, $lt: tomorrow } } },
+//           { $group: { _id: null, total: { $sum: '$remainingAmount' } } }
+//         ],
+
+//         // Total money actually received this WEEK
+//         weekReceived: [
+//           { $match: { createdAt: { $gte: startOfWeek } } },
+//           { $group: { _id: null, total: { $sum: '$amountPaid' } } }
+//         ],
+
+//         // Total money actually received this MONTH
+//         monthReceived: [
+//           { $match: { createdAt: { $gte: startOfMonth } } },
+//           { $group: { _id: null, total: { $sum: '$amountPaid' } } }
+//         ],
+
+//         // Optional: count of bookings today (for reference)
+//         todayBookingsCount: [
+//           { $match: { bookingDate: { $gte: today, $lt: tomorrow } } },
+//           { $count: 'count' }
+//         ]
+//       }
+//     }
+//   ]);
+
+//   const data = result[0] || {};
+
+//   const format = (val) => Math.round(val || 0);
+
+//   return {
+//     today: {
+//       received: format(data.todayReceived?.[0]?.total),
+//       expectedRemaining: format(data.todayExpectedRemaining?.[0]?.total),
+//       totalPotential: format(
+//         (data.todayReceived?.[0]?.total || 0) +
+//         (data.todayExpectedRemaining?.[0]?.total || 0)
+//       )
+//     },
+//     thisWeekReceived: format(data.weekReceived?.[0]?.total),
+//     thisMonthReceived: format(data.monthReceived?.[0]?.total),
+//     todayBookings: data.todayBookingsCount?.[0]?.count || 0,
+
+//     // You can add currency if stored per shop/document
+//     currency: 'INR' // ← change as needed
+//   };
+// }
 
 module.exports.updateBooking = async ({
   bookingId,
@@ -199,3 +317,4 @@ module.exports.upcomingBooking = async (userId) => {
     return null;
   }
 };
+

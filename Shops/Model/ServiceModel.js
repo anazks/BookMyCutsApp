@@ -13,6 +13,10 @@ const ServiceSchema = new mongoose.Schema(
       required: true,
       min: 0, // Ensures rate is a positive number
     },
+    duration:{  
+      type:Number,
+      required:true
+    },
     shopId: {
       type: String,
       required: true,

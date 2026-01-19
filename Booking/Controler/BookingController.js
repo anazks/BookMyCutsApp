@@ -1,11 +1,12 @@
 const Decoder = require('../../TokenDecoder/Decoder')
 const {checkAvailble,bookNow,bookingCompletion,getBarberFullSchedule,getShopAvailableSlots} = require('../UseCause/BookingUseCause')
-const {mybooking,findDashboardIncomeFuncion,upcomingBooking} = require('../Repo/BookingRepo')
+const {mybooking,findDashboardIncomeFunction,upcomingBooking} = require('../Repo/BookingRepo')
 const RazorPay = require('../../Razorpay/RazorpayConfig')
 const mongoose = require('mongoose');
 const { trace } = require('../Router/BookingRouter');
 const crypto = require('crypto'); // CommonJS
 const BookingModel = require('../Models/BookingModel');
+const ShopModel  = require('../../Shops/Model/ShopModel')
  
 
 const nodemailer = require('nodemailer');
@@ -140,32 +141,69 @@ const getMybooking = async (req, res) => {
     }
 }
 
-const findDashboardIncome =  async (req, res) => {
+const findDashboardIncome = async (req, res) => {
     try {
-         let token = req.headers['authorization']?.split(' ')[1]; // Bearer <token>
-        let decodedValue = await Decoder(token);  
-        const shopId = decodedValue.id
-        const dashboardIncome = await findDashboardIncomeFuncion(shopId)
-        if(dashboardIncome){
-            return res.status(200).json({ 
-                success: true,
-                message:"successfully fetch dashboard income",
-                dashboardIncome
-             });
-        }else{
+        // 1. Get and validate token
+        const authHeader = req.headers.authorization;
+        if (!authHeader?.startsWith('Bearer ')) {
+            return res.status(401).json({
+                success: false,
+                message: "Missing or invalid authorization header"
+            });
+        }
+
+        const token = authHeader.split(' ')[1];
+        const decoded = await Decoder(token);
+
+        // 2. Get user id from token
+        const userId = decoded.id;
+        if (!userId) {
+            return res.status(401).json({
+                success: false,
+                message: "Invalid token - user id not found"
+            });
+        }
+
+        // 3. Find the shop owned by this user
+        const shop = await ShopModel.findOne(
+            { ShopOwnerId: userId },   // ← IMPORTANT: use userId here
+            { _id: 1 }                 // we only need the _id
+        ).lean();
+
+        if (!shop?._id) {
             return res.status(404).json({
                 success: false,
-                
-            })
+                message: "No shop found for this user"
+            });
         }
+
+        const shopId = shop._id;
+
+        console.log(`[DASHBOARD] User ${userId} → Shop ${shopId}`);
+
+        // 4. Calculate income using the correct shopId
+        const dashboardIncome = await findDashboardIncomeFunction(shopId);
+
+        console.log("Dashboard Income Result:", dashboardIncome);
+
+        // 5. Return response
+        return res.status(200).json({
+            success: true,
+            message: "Successfully fetched dashboard income",
+            dashboardIncome
+        });
+
     } catch (error) {
+        console.error("Error in findDashboardIncome:", error);
+
         return res.status(500).json({
             success: false,
-            message:"internal error"
-        })
+            message: "Internal server error",
+            // only show error details in development
+            ...(process.env.NODE_ENV === 'development' && { error: error.message })
+        });
     }
-}
-
+};
 
 const barberFreeSlots = async (req,res) => { 
     try {
@@ -285,7 +323,7 @@ const sendConfirmationMail = async (bookingId, email) => {
 
     const { bookingDate, timeSlot } = booking;
     const start = timeSlot.startingTime;
-    const end = timeSlot.endingTime;
+    const end = timeSlot.endingTime;    
 
     const transporter = nodemailer.createTransport({
       service: 'gmail',

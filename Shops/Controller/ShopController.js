@@ -83,7 +83,7 @@ const AddShop = asyncHandler(async (req, res) => {
         const shopAdded = await addShop(data);
         console.log("Shop added:", shopAdded);  
         if (shopAdded) {
-            return res.status(201).json({
+            return res.status(200).json({
                 success: true,
                 message: "Shop added successfully",
                 data: shopAdded,
@@ -413,7 +413,7 @@ const myprofile = asyncHandler(async (req, res) => {
         });
     }
 });
-const viewMyshop = asyncHandler(async (req, res) => {
+const   viewMyshop = asyncHandler(async (req, res) => {
     const token = req.headers['authorization']?.split(' ')[1];
     if (!token) {
         return res.status(401).json({

@@ -3,7 +3,7 @@ const mongoose = require('mongoose');
 const bookingSchema = new mongoose.Schema({
   barberId: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'Barber',
+    ref: 'Barabar',
     required: true
   },
   userId: {
@@ -13,7 +13,7 @@ const bookingSchema = new mongoose.Schema({
   },
   shopId: {
     type: mongoose.Schema.Types.ObjectId,
-    ref:'shop',
+    ref:'Shop',
     required: true
   },
 

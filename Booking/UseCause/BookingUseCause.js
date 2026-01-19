@@ -49,7 +49,8 @@ const assignBarber = async (startTime, endTime, bookingDate, shopId) => {
 
   // 5️⃣ No barber available
   if (freeBarbers.length === 0) {
-    throw new Error("No barber available for selected time slot");
+    // throw new Error("No barber available for selected time slot");
+    return null;
   }
 
   // 6️⃣ Assign barber (simple strategy)
@@ -94,7 +95,9 @@ module.exports.bookNow = async (data, decodedValue) => {
     data.shopId
   );
 
-  data.barberId = barber._id; // 🔥 THIS WAS MISSING
+  data.barberId = barber ? barber._id : null;
+
+
   console.log("ASSIGNED BARBER ID:", data.barberId);
 }
 

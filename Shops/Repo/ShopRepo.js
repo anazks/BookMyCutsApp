@@ -9,14 +9,27 @@ const UserModel = require('../../Auth/Model/UserModel')
 
 const ShopperModel = require('../../Auth/Model/ShoperModel');
 const BankDetailsModel = require('../Model/BankDetails');
+const WorkingHours = require('../Model/WorkingHours'); // Import model
 
 module.exports.addShop = async (data) => {
     try {
-       return await ShopModel.create(data);
+        // 1. Create the shop
+        const newShop = await ShopModel.create(data);
+        
+        // 2. Create default working hours for this shop
+        await WorkingHours.create({
+            shop: newShop._id
+            // days will be auto-populated by pre-save middleware
+        });
+        
+        console.log(`✅ Shop "${newShop.shopName}" created with default working hours`);
+        
+        return newShop;
     } catch (error) {
-        console.log(error);
+        console.log("Error creating shop:", error);
+        throw error;
     }
-}
+};
 
 module.exports.viewAllShops = async () => {
     try {
