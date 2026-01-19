@@ -56,72 +56,74 @@ const createOrder = async (req, res) => {
 }
 
 const verifyPayment = async (req, res) => {
-    console.log("verify payment started...");
-    console.log("Request body:", req.body);
-    
-    try {
-        const {
-            razorpay_payment_id,
-            razorpay_order_id,
-            razorpay_signature,
-            paymentType,
-            amount,
-            bookingId,
-            email
-        } = req.body;
-        let Details = req.body
+  console.log("verify payment started...");
+  try {
+    const {
+      razorpay_payment_id,
+      razorpay_order_id,
+      razorpay_signature,
+      paymentType,
+      amount,
+      bookingId,
+      email
+    } = req.body;
 
-        // Validate required fields
-        if (!razorpay_payment_id || !razorpay_order_id || !razorpay_signature) {
-            return res.status(400).json({
-                success: false,
-                message: 'Missing required payment verification fields'
-            });
-        }
-        // Create signature verification string
-        const body = razorpay_order_id + "|" + razorpay_payment_id;
-        const expectedSignature = crypto
-            .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET)
-            .update(body.toString())
-            .digest('hex');
-
-        const isAuthentic = expectedSignature === razorpay_signature;
-        console.log("Signature verification:", isAuthentic);
-        console.log("Expected signature:", expectedSignature);
-        console.log("Received signature:", razorpay_signature);
-
-        if (!isAuthentic) {
-            return res.status(400).json({
-                success: false,
-                message: 'Payment verification failed - Invalid signature'
-            });
-        }else{
-            
-            let response = await bookingCompletion(Details)
-            console.log(response,"booking controller response after pay")
-            await sendConfirmationMail(bookingId,email)
-            return res.status(200).json({
-            success: true,
-            message: 'Payment verification successful',
-            data: {
-                paymentId: razorpay_payment_id,
-                orderId: razorpay_order_id,
-                amount: amount,
-                paymentType: paymentType
-            }
-        });
-        }
- 
-      
-    } catch (error) {
-        console.log("Payment verification error:", error);
-        return res.status(500).json({
-            success: false,
-            message: 'Internal server error during payment verification',
-            error: error.message
-        });
+    if (!razorpay_payment_id || !razorpay_order_id || !razorpay_signature) {
+      return res.status(400).json({ success: false, message: 'Missing required fields' });
     }
-}; 
+
+    // Razorpay signature verification (fast)
+    const crypto = require('crypto');
+    const expectedSignature = crypto
+      .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET)
+      .update(`${razorpay_order_id}|${razorpay_payment_id}`)
+      .digest('hex');
+
+    if (expectedSignature !== razorpay_signature) {
+      return res.status(400).json({ success: false, message: 'Invalid signature' });
+    }
+
+    // Update booking (faster version)
+    const remainingAmount = paymentType === 'full' ? 0 : Math.max((req.body.totalPrice || amount) - amount, 0);
+    const updatedBooking = await BookingModel.findByIdAndUpdate(
+      bookingId,
+      {
+        paymentId: razorpay_payment_id,
+        paymentType,
+        amountPaid: Number(amount),
+        remainingAmount,
+        paymentStatus: paymentType === 'full' ? 'paid' : 'partial',
+        bookingStatus: 'confirmed'
+      },
+      { new: true, lean: true }
+    );
+
+    if (!updatedBooking) {
+      return res.status(404).json({ success: false, message: 'Booking not found' });
+    }
+
+    // Send confirmation email asynchronously
+    sendConfirmationMail(bookingId, email)
+      .then(() => console.log('Email sent'))
+      .catch(err => console.error('Email error:', err));
+
+    // Respond immediately
+    return res.status(200).json({
+      success: true,
+      message: 'Payment verification successful',
+      data: {
+        paymentId: razorpay_payment_id,
+        orderId: razorpay_order_id,
+        amount,
+        paymentType
+      }
+    });
+
+  } catch (error) {
+    console.error('Payment verification error:', error);
+    return res.status(500).json({ success: false, message: 'Internal server error', error: error.message });
+  }
+};
 
 
 
