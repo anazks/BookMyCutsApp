@@ -35,12 +35,10 @@ module.exports.findShoper = asyncHandler(async (data) => {
     throw new Error("User not found");
   }
   const shop = await ShopModel.findOne({ ShopOwnerId: user._id });
-  if (!shop) {
-    throw new Error("Shop not found");
-  }
+ 
   return {
     user,
-    shopId: shop._id,
+    shopId: shop?._id ?? null,
   };
 });
 module.exports.getUserProfile = asyncHandler(async (data) => {
