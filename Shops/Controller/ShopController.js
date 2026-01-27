@@ -45,7 +45,7 @@ const ShopModel = require("../Model/ShopModel");
 const AddShop = asyncHandler(async (req, res) => {
     const data = req.body;
     console.log("Data received for adding shop:", data);
-    // Validate presence of data
+
     if (!data) {
         return res.status(400).json({
             success: false,
@@ -53,7 +53,6 @@ const AddShop = asyncHandler(async (req, res) => {
         });
     }
 
-    // Check for token
     const token = req.headers['authorization']?.split(' ')[1];
     if (!token) {
         return res.status(401).json({
@@ -63,31 +62,50 @@ const AddShop = asyncHandler(async (req, res) => {
     }
 
     try {
-        // Decode the token
         const decoded = jwt.verify(token, secretkey);
         req.userId = decoded.id;
-
-        // Add userId to the shop data
         data.ShopOwnerId = req.userId;
 
-        console.log("Data received for adding shop:", data);
+        console.log("Data with owner ID:", data);
 
-        let geocode = await convertToGeocode(data)
-        console.log("geocode:",geocode)
-        if(geocode.success){
-           data.ExactLocationCoord = {
-            type:"Point",
-            coordinates:[geocode.longitude,geocode.latitude]
-           }
+        let geocode = await convertToGeocode(data);
+        console.log("geocode:", geocode);
+
+        // Define fallback coordinates for Kanayannur / central Ernakulam area
+        // Most reliable from Wikipedia, Geodatos, etc.: ~9.9667 N, 76.2667 E
+        const fallbackLng = 76.2667;  // Longitude
+        const fallbackLat = 9.9667;   // Latitude
+
+        // Always set the field – use real if valid, fallback otherwise
+        data.ExactLocationCoord = {
+            type: "Point",
+            coordinates: [
+                (geocode?.success && !isNaN(Number(geocode.longitude)) 
+                    ? Number(geocode.longitude) 
+                    : fallbackLng),
+                (geocode?.success && !isNaN(Number(geocode.latitude)) 
+                    ? Number(geocode.latitude) 
+                    : fallbackLat)
+            ]
+        };
+
+        // Optional: Log when fallback is used (helpful for debugging)
+        if (!geocode?.success || isNaN(Number(geocode.longitude)) || isNaN(Number(geocode.latitude))) {
+            console.warn(`Geocode failed or invalid → using fallback coords: [${fallbackLng}, ${fallbackLat}]`);
         }
+
+        console.log("Final ExactLocationCoord:", data.ExactLocationCoord);
+
         const shopAdded = await addShop(data);
-        console.log("Shop added:", shopAdded);  
+        console.log("Shop added:", shopAdded);
+
         if (shopAdded) {
-            return res.status(200).json({
+            return res.status(201).json({  // 201 better for creation
                 success: true,
                 message: "Shop added successfully",
                 data: shopAdded,
-                geocode
+                geocode,
+                usedFallback: !geocode?.success
             });
         } else {
             return res.status(500).json({
@@ -97,10 +115,11 @@ const AddShop = asyncHandler(async (req, res) => {
         }
 
     } catch (error) {
-        console.error("Token verification failed:", error);
-        return res.status(401).json({
+        console.error("Error in AddShop:", error);
+        return res.status(500).json({
             success: false,
-            message: "Invalid token"
+            message: "Server error",
+            error: error.message
         });
     }
 });
