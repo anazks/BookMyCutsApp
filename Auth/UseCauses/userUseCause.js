@@ -22,38 +22,111 @@ module.exports.registerUserUseCase = async (data)=>{
     return user;
 }
 
+// usecase / service layer
 module.exports.loginuserUsecause = async (data) => {
-    let email = data.email;
-    console.log(email, "email in usecause");
-    // Problem: You're passing email directly, but findUser expects an object with email property
-    let user = await findUser({email: email}); 
-    // Check if user exists
-    if (!user) {
-        return {message: "User not found"};
+    try {
+        const { email, password } = data;
+
+        if (!email || !password) {
+            return {
+                success: false,
+                message: "Email and password are required"
+            };
+        }
+
+        console.log(`Login attempt for email: ${email}`);
+
+        const user = await findUser({ email });
+        if (!user) {
+            return {
+                success: false,
+                message: "User not found"
+            };
+        }
+
+        // Safety check: prevent bcrypt crash if password field is missing/corrupted
+        if (!user.password || typeof user.password !== 'string' || !user.password.startsWith('$2')) {
+            console.error(`Invalid or missing password hash for user: ${email}`);
+            return {
+                success: false,
+                message: "Invalid account credentials"
+            };
+        }
+
+        let isMatch;
+        try {
+            isMatch = await bcrypt.compare(password, user.password);
+        } catch (bcryptErr) {
+            console.error("bcrypt.compare failed:", bcryptErr.message);
+            return {
+                success: false,
+                message: "Authentication error – please try again"
+            };
+        }
+
+        if (!isMatch) {
+            return {
+                success: false,
+                message: "Invalid password"
+            };
+        }
+
+        // ── Successful login ────────────────────────────────────────────────
+        const token = jwt.sign(
+            { id: user._id.toString() },
+            secretKey,
+            { expiresIn: '1h' }
+        );
+
+        const userData = {
+            id: user._id.toString(),
+            firstName: user.firstName || '',
+            mobileNo: user.mobileNo || '',
+            city: user.city || ''
+            // Add any other safe fields you want to return
+        };
+
+        return {
+            success: true,
+            message: "Login successful",
+            token,
+            user: userData
+        };
+
+    } catch (error) {
+        console.error("loginuserUsecause error:", error);
+        return {
+            success: false,
+            message: "Server error during login"
+        };
     }
-    
-    let {password} = data;
-    console.log(password, "---------", user);
-    const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) {
-        return {message: "Invalid password",success:false}; // Password is incorrect
-    }
-    
-    const token = jwt.sign({ id: user._id }, secretKey, { expiresIn: '1h' });
-    let {firstName} = user;
-    let {mobileNo} = user;
-    let {city} = user;
-    let {id} = user;
-    let userData = {
-        firstName,
-        mobileNo,
-        city,
-        id
-    };
-    
-    console.log(token);
-    return {token, userData};
 };
+
+// Controller
+const userLogin = asyncHandler(async (req, res) => {
+    const data = req.body;
+    console.log("Login request body:", data);
+
+    const result = await loginuserUsecause(data);
+
+    // We always return 200 with success flag (most common REST pattern for auth)
+    // Alternative: use 401 for auth failures — choose your preference
+
+    if (result.success) {
+        return res.status(200).json({
+            success: true,
+            message: "Login successful",
+            token: result.token,
+            user: result.user
+        });
+    }
+
+    // failed cases (user not found / wrong password)
+    return res.status(401).json({
+        success: false,
+        message: result.message
+    });
+});
 
 module.exports.registerShoperUseCase =asyncHandler (async(data)=>{
     let {password} = data ;
@@ -63,35 +136,48 @@ module.exports.registerShoperUseCase =asyncHandler (async(data)=>{
     const shop = await createShoper(data);
     return shop;
 })
-module.exports.loginShoperUsecause = asyncHandler(async(data)=>{
-    console.log(data,"data in usecase shoperlll")
-    const result = await findShoper(data);
-    const { user, shopId } = result;
-    let {password} = data;
-    console.log(user,"shoper")
-    console.log(data,"---------0000")
-    if(!user){
-        return {message:"Invalid Email"}
-    }
-    const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) {
-        throw new Error('Invalid password'); // Password is incorrect
-    }
-    const token = jwt.sign({ id: user._id }, secretKey, { expiresIn: '1h' }); // Token expires in 1 hour
-    let  {firstName} = user;
-    let {mobileNo} = user;
-    let {city} = user;
-    let {_id} = user;
-    let userData ={
-            _id,
-            firstName,
-            mobileNo,
-            city,
-            shopId
-    }
-    console.log(token)
-    return {token,userData}
-})
+module.exports.loginShoperUsecause = async (data) => {
+  const result = await findShoper(data);
+  const { user, shopId } = result;
+  const { password } = data;
+
+  if (!user) {
+    return {
+      success: false,
+      statusCode: 401,
+      message: "Invalid email",
+    };
+  }
+
+  const isMatch = await bcrypt.compare(password, user.password);
+
+  if (!isMatch) {
+    return {
+      success: false,
+      statusCode: 401,
+      message: "Invalid password",
+    };
+  }
+
+  const token = jwt.sign({ id: user._id }, secretKey, {
+    expiresIn: "1h",
+  });
+
+  const { firstName, mobileNo, city, _id } = user;
+
+  return {
+    success: true,
+    token,
+    userData: {
+      _id,
+      firstName,
+      mobileNo,
+      city,
+      shopId,
+    },
+  };
+};
+
 
 module.exports.sendOtpmobileNo = async (data) => {
   // Input validation

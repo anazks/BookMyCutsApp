@@ -19,19 +19,46 @@ const userRegistration = asyncHandler(async (req,res)=>{
         result
     })
 });
- 
-const userLogin = asyncHandler(async (req,res)=>{
-        const data = req.body;
-        console.log(data,"data")
-        const user = await loginuserUsecause(data)
-        console.log(user,"token")
-        console.log(user,"token")
-        res.json({
-            success:true,
-            message:"login Data",
-            result:user
-        })
-})
+
+const userLogin = asyncHandler(async (req, res) => {
+    try {
+        const result = await loginuserUsecause(req.body);
+
+        if (result) {
+            return res.status(200).json({
+                success: true,
+                message: result.message || "Login successful",
+                token: result.token,
+                user: result.user
+            });
+        }if (result === 0) {
+          res.json({
+            success:false,
+            message:"authentication failed"
+            
+          })
+        } else {
+          
+        }{
+            res.status(401).json({
+            success: false,
+            message: result.message || "Authentication failed"
+        });
+        }
+
+       
+
+    } catch (error) {
+        console.error("userLogin controller error:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Internal server error",
+            // error: error.message   // ← uncomment only during development
+        });
+    }
+});
+
+
 
 const ShopRegister = asyncHandler (async (req,res)=>{
     const data = req.body;
@@ -43,20 +70,32 @@ const ShopRegister = asyncHandler (async (req,res)=>{
         shop
     })
 })
-const login = asyncHandler(async(req,res)=>{
-    const data = req.body;
-    console.log(data,"data")
-    const user = await loginShoperUsecause(data)
-    console.log(user,"token")
-    res.json({
-        success:true,
-        message:"login Data",
-        result:user
-    })
-})
+const login = asyncHandler(async (req, res) => {
+  const data = req.body;
+
+  const result = await loginShoperUsecause(data);
+
+  // ❌ Handle errors FIRST
+  if (!result.success) {
+    return res.status(result.statusCode || 400).json({
+      success: false,
+      message: result.message,
+    });
+  }
+
+  // ✅ Success response
+  res.status(200).json({
+    success: true,
+    message: "Login successful",
+    token: result.token,
+    user: result.userData,
+  });
+});
+
 const userModel = require('../Model/UserModel');
 const ShoperModel = require("../Model/ShoperModel");
 const Decoder = require("../../TokenDecoder/Decoder");
+const { error } = require("console");
 const getUsers = asyncHandler(async(req,res)=>{
     let users = await userModel.find({})
     res.json(users)
