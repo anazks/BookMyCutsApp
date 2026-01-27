@@ -40,20 +40,6 @@ const ShopSchema = new mongoose.Schema(
         message: props => `${props.value} is not a valid mobile number!`
       }
     },
-    Timing: {
-      type: String,
-      required: true
-    },
-    website: {
-      type: String,
-      required: true,
-      validate: {
-        validator: function (v) {
-          return /^(https?:\/\/)?([\da-z.-]+)\.([a-z.]{2,6})([/\w .-]*)*\/?$/.test(v);
-        },
-        message: props => `${props.value} is not a valid website URL!`
-      }
-    },
       media: {
         type: [{
             url: {

@@ -32,6 +32,7 @@ const userLogin = asyncHandler(async (req,res)=>{
             result:user
         })
 })
+
 const ShopRegister = asyncHandler (async (req,res)=>{
     const data = req.body;
     console.log(data)
