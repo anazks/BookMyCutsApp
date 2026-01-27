@@ -6,6 +6,8 @@ const {uploadMedia}  = require('../../Shops/CloudStorageCurds/CloudCurds')
 const upload = require('../../Cloudinary/MulterConfig')
 const WorkingHoursRoutes = require('../Router/WorkingHoursRoutes');
 const { findShoper } = require('../../Auth/Repos/userRepo');
+const PayoutRoutes = require('../Router/PayoutRoutes')
+const {upsertPayoutAccount} = require('../Controller/PayoutController')
 
 router.route('/addShop').post(AddShop)
 router.route('/getMyProfile').get(myprofile)
@@ -37,8 +39,8 @@ router.route('/deleteBarber/:id').delete(deleteBarber)
 router.route('/premium').post(makePremium)
 router.route('/getAllPremium').get(getAllPremiumShops)
 
-router.route('/saveBankDetails/:id').post(saveBankDetails)
-router.route('/viewBankDetails/:id').get(viewbankDetails)
+router.route('/saveBankDetails').post(saveBankDetails)
+router.route('/viewBankDetails').get(viewbankDetails)
 
 router.route('/deleteBankDetails/:id').delete(deleteBankDetails)
 router.route('/updateBankdetails/:id').put(upadateBankdetails)
@@ -53,7 +55,11 @@ router.route('/fetchAllUniqueService').get(fetchAllUniqueService)
 router.route('/filterShopsByService').post(filterShopsByService)
 router.route('/viewAllservice').get(viewAllService)
 
+router.route('/accounts').post(upsertPayoutAccount)
 
+ 
+
+router.use('/payout',PayoutRoutes)
 router.use('/workingHours',WorkingHoursRoutes)
 
 

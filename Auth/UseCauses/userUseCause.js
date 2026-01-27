@@ -65,7 +65,11 @@ module.exports.registerShoperUseCase =asyncHandler (async(data)=>{
 })
 module.exports.loginShoperUsecause = asyncHandler(async(data)=>{
     console.log(data,"data in usecase shoperlll")
-    let user = await findShoper(data)
+    const result = await findShoper(data);
+    if (!result?.shopId) {
+      throw new Error("Shop ID missing");
+    }
+    const { user, shopId } = result;
     let {password} = data;
     console.log(user,"shoper")
     console.log(data,"---------0000")
@@ -85,7 +89,8 @@ module.exports.loginShoperUsecause = asyncHandler(async(data)=>{
             _id,
             firstName,
             mobileNo,
-            city 
+            city,
+            shopId
     }
     console.log(token)
     return {token,userData}

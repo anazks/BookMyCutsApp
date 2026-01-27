@@ -42,21 +42,27 @@ module.exports. isSlotConflicting = async (
 };
 
 
-module.exports.mybooking = async (userId) => {
+module.exports.myBooking = async (userId,  limit) => {
   try {
+    // Ensure safe numbers
     const bookings = await BookingModel.find({ userId })
       .populate("shopId", "ShopName")
-      .populate("barberId", "BarberName");
-      // .populate("serviceId","ServiceName")
+      .populate("barberId", "BarberName")
+      // .populate("serviceId", "ServiceName")
+      .sort({ createdAt: -1 })     // newest first – change field if needed
+      .limit(limit)
+      .lean()                      // optional: faster if you don't modify docs
+      .exec();
 
-    return bookings;
+    return bookings;               // ← only the array, same shape as your original
+
   } catch (error) {
-    console.log(error);
+    console.error("Error fetching bookings:", error);
     throw error;
   }
 };
 
- 
+
 
 module.exports.findDashboardIncomeFunction = async (shopId) => {
   console.log('🔍 [DASHBOARD] Starting income calc for shopId:', shopId);

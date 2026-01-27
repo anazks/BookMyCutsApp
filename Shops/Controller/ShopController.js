@@ -614,35 +614,71 @@ const getAllPremiumShops = async (req,res) => {
     }
 }
 
-const saveBankDetails = async (req,res) => {
-    try {
-        const shoperId = req.params.id
-        const data = req.body
-        const bankDetails = await saveBankDetailsFunction(data,shoperId)
-        if(!bankDetails){
-            return res.status(404).json({
-                success:false,
-                message:"failed to save bank details"
-            })
-        }else{
-            return res.status(200).json({
-                success:true,
-                message:"successfully saved bank details",
-                bankDetails
-            })
-        }
-    } catch (error) {
-        console.error(error)
-         return res.status(500).json({
-                success:false,
-                message:"internal server error"
-            })
+const saveBankDetails = async (req, res) => {
+  try {
+    // 1. Get token
+    const token = req.headers['authorization']?.split(' ')[1];
+
+    if (!token) {
+      return res.status(401).json({
+        success: false,
+        message: "Token required"
+      });
     }
-}
+
+    // 2. Decode token
+    const tokenData = await Decoder(token);
+    console.log("token data in controller =====", tokenData);
+
+    const shoperId = tokenData.id;
+    console.log("shoperId------------", shoperId);
+
+    // 3. Create data object (do NOT mutate req.body)
+    const data = {
+      ...req.body,
+      ShoperId: shoperId   // 🔴 match schema field name
+    };
+
+    // 4. Save bank details
+    const bankDetails = await saveBankDetailsFunction(data);
+
+    if (!bankDetails) {
+      return res.status(400).json({
+        success: false,
+        message: "Failed to save bank details"
+      });
+    }
+
+    // 5. Success response
+    return res.status(200).json({
+      success: true,
+      message: "Successfully saved bank details",
+      bankDetails
+    });
+
+  } catch (error) {
+    console.error("saveBankDetails error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error"
+    });
+  }
+};
+
 
 const viewbankDetails = async (req,res) => {
     try {
-       const shoperId = req.params.id
+          const token = req.headers['authorization']?.split(' ')[1];
+        if(!token){
+            res.status(404).json({
+                success:false,
+                message:"token required"
+            })
+        }
+        const tokenData = await Decoder(token);
+        console.log(tokenData)
+        const shoperId = tokenData.id
        const bankDetails = await viewbankDetailsFunction(shoperId) 
        console.log("Bank details",bankDetails)
        if(!bankDetails){
@@ -1030,6 +1066,8 @@ const viewAllService = async (req,res) => {
     console.log(error)
   }
 }
+
+
 
 
 module.exports = {

@@ -7,6 +7,7 @@ const connectToDatabase = require('./Config/DbConfig')
 const mongoose = require('mongoose');
 const User = require('./Auth/Model/UserModel')
 const cron = require('node-cron')
+
 app.use(cors())
 
 const authRouter = require('./Auth/Routes/userRoute');

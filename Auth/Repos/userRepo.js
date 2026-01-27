@@ -4,6 +4,7 @@ const asyncHandler = require("express-async-handler");
 const { userLogin } = require("../Controllers/AuthController");
 const otpModel = require("../Model/OtpModel");
 const ShoperModel = require("../Model/ShoperModel");
+const ShopModel = require("../../Shops/Model/ShopModel");
 
 module.exports.createUser = asyncHandler(async (data)=>{
     try {
@@ -25,11 +26,23 @@ module.exports.findUser = asyncHandler(async(data) => {
 module.exports.createShoper = asyncHandler(async (data)=>{
     return await shoperModel.create(data)
 })
-module.exports.findShoper = asyncHandler(async (data)=>{
-    let {email}  = data;
-    console.log(email,"email----------------------")
-    return await shoperModel.findOne({email:email})
-})
+module.exports.findShoper = asyncHandler(async (data) => {
+  const { email } = data;
+  console.log(email, "email----------------------")
+  const user = await shoperModel.findOne({ email });
+
+  if (!user) {
+    throw new Error("User not found");
+  }
+  const shop = await ShopModel.findOne({ ShopOwnerId: user._id });
+  if (!shop) {
+    throw new Error("Shop not found");
+  }
+  return {
+    user,
+    shopId: shop._id,
+  };
+});
 module.exports.getUserProfile = asyncHandler(async (data) => {
     try {
        let  user = await UserModel.findById({_id:data.id}); 
@@ -48,12 +61,51 @@ module.exports.deleteUserFunction = async (userId) => {
     }
 }
 
-module.exports.getAllShopOwners = async () => {
-    try {
-        const shopOwners = await ShoperModel.find();
-        return shopOwners
-    } catch (error) {
-        console.log(error)
+module.exports.getAllShopOwners = async (page = 1, limit = 10) => {
+  try {
+    const skip = (page - 1) * limit;
+
+    // Fetch paginated shop owners and total count in parallel for efficiency
+    const [shopOwners, totalShopOwners] = await Promise.all([
+      ShoperModel.find()
+        .skip(skip)
+        .limit(limit)
+        .sort({ createdAt: -1 }) // Optional: sort by newest first
+        .lean(), // Use lean() for better performance if you don't need Mongoose docs
+
+      ShoperModel.countDocuments(), // Total count for pagination metadata
+    ]);
+
+    return { shopOwners, totalShopOwners };
+  } catch (error) {
+    console.error("Error fetching shop owners:", error);
+    throw error; // Let the controller handle the error response
+  }
+};
+
+module.exports.updatePassword = async (password, email, role) => {
+  try {
+    let model;
+
+    if (role === 'user') {
+      model = UserModel;
+    } else if (role === 'shopper') {
+      model = ShoperModel;
+    } else {
+      throw new Error('Invalid role');
     }
-}
+
+    const updatedUser = await model.findOneAndUpdate(
+      { email: email },           // 🔍 find by email
+      { $set: { password } },     // 🔐 update password
+      { new: true }               // return updated doc
+    );
+
+    return updatedUser;
+  } catch (error) {
+    console.error('Update password error:', error);
+    throw error;
+  }
+};
+
 

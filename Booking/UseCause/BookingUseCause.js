@@ -69,6 +69,8 @@ module.exports.bookNow = async (data, decodedValue) => {
       const startTime = new Date(data.timeSlot.startingTime);
     const endTime = new Date(data.timeSlot.endingTime);
 
+    console.log("START")
+
     // 🛡️ Safety check (VERY IMPORTANT)
     if (isNaN(startTime.valueOf()) || isNaN(endTime.valueOf())) {
       throw new Error("Invalid time slot provided");

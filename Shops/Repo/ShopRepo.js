@@ -230,6 +230,7 @@ module.exports.getAllPremiumShopsFunction = async () => {
 
 module.exports.saveBankDetailsFunction = async (data) => {
     try {
+        console.log("data in repo",data)
         return await BankDetailsModel.create(data)
     } catch (error) {
         console.error(error)
@@ -238,7 +239,10 @@ module.exports.saveBankDetailsFunction = async (data) => {
 
 module.exports.viewbankDetailsFunction = async (shoperId) => {
     try {
+        console.log("shoperId in  repo",shoperId)
         const bank = await BankDetailsModel.findOne({ ShoperId: shoperId });
+        const allBankdetails = await BankDetailsModel.find({})
+        console.log("all bank details",allBankdetails)
         return bank
     } catch (error) {
        console.error(error) 

@@ -1,5 +1,5 @@
 const express = require('express');
-const { userRegistration,userLogin,ShopRegister,login,getUsers,getProfile,otpRequest,verifyOtp,deleteUser,viewAllShopOwners } = require('../Controllers/AuthController');
+const { userRegistration,userLogin,ShopRegister,login,getUsers,getProfile,otpRequest,verifyOtp,deleteUser,viewAllShopOwners,forgotPassword,verifyForgotPasswordOtp,resetPassword,} = require('../Controllers/AuthController');
 const { verifyToken } = require('../../Middlewares/AuthMiddleWares/AuthMiddleWare');
 const router = express.Router(); 
 
@@ -15,6 +15,9 @@ router.route('/otpRequest').post(otpRequest)
 router.route('/verifyOtp').post(verifyOtp)
 
 router.route('/viewAllShopOwners').get(viewAllShopOwners)
+router.route('/forgot-password').post(forgotPassword)
+router.route('/verify-forgot-otp').post(verifyForgotPasswordOtp)
+router.route('/reset-password').post(resetPassword)
 
 // router.route('/userLogin').post(userLogin)
 
