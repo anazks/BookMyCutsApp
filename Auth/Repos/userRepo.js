@@ -122,7 +122,7 @@ module.exports.fetchUsers = async (page,limit) => {
 module.exports.findUser = async (userId) => {
   try {
     console.log(userId, "userId");
-    const owner = await shoperModel.findById(userId);
+    const owner = await UserModel.findById(userId);
     if (!owner) {
       return null;
     }
