@@ -1,4 +1,4 @@
-const { createUser,findUser,createShoper,findShoper, saveOtp } = require("../Repos/userRepo");
+const { createUser,findUserByEmail ,createShoper,findShoper, saveOtp } = require("../Repos/userRepo");
 const bcrypt = require('bcryptjs')
 const jwt = require('jsonwebtoken');
 const nodemailer = require('nodemailer');
@@ -36,7 +36,7 @@ module.exports.loginuserUsecause = async (data) => {
 
         console.log(`Login attempt for email: ${email}`);
 
-        const user = await findUser({ email });
+        const user = await findUserByEmail({ email });
         if (!user) {
             return {
                 success: false,

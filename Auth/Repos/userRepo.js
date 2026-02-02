@@ -17,7 +17,7 @@ module.exports.createUser = asyncHandler(async (data)=>{
     }
 })
 
-module.exports.findUser = asyncHandler(async(data) => {
+module.exports.findUserByEmail = asyncHandler(async(data) => {
     let {email} = data;
     console.log(email, "email in rep####");
     return await UserModel.findOne({email: email});
@@ -119,7 +119,7 @@ module.exports.fetchUsers = async (page,limit) => {
   }
 }
 
-module.exports.findUser = async (userId) => {
+module.exports.findUserById = async (userId) => {
   try {
     console.log(userId, "userId");
     const owner = await UserModel.findById(userId);

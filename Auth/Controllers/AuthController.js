@@ -1,7 +1,7 @@
 const asyncHandler = require("express-async-handler");
 const { registerUserUseCase,loginuserUsecause,registerShoperUseCase,loginShoperUsecause,sendOtpmobileNo,verifyOtpFunction } = require("../UseCauses/userUseCause");
 const decorder = require("../../TokenDecoder/Decoder");
-const {getUserProfile,deleteUserFunction,getAllShopOwners, updatePassword,fetchUsers,findUser,modifyShopOwner,deleteShopOwner} = require("../Repos/userRepo")
+const {getUserProfile,deleteUserFunction,getAllShopOwners, updatePassword,fetchUsers,findUserById,modifyShopOwner,deleteShopOwner} = require("../Repos/userRepo")
 const bcrypt = require('bcryptjs')
 const jwt = require('jsonwebtoken');
 const otpModel = require('../Model/OtpModel')
@@ -525,7 +525,7 @@ const resetPassword = async (req,res) => {
 const fetchUser = async (req,res) => {
   try {
     const userId = req.params.id
-    const user = await findUser(userId)
+    const user = await findUserById(userId)
     if(user){
       res.status(200).json({
         success:true,
