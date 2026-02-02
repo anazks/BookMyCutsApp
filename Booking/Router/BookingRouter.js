@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 
-const {checkAvailability,AddBooking,createOrder,getMybooking,findDashboardIncome,verifyPayment,barberFreeSlots,fetchAllAvailableTimeSlots,fetchUpComeingBooking,fetchAllbookings} = require('../Controler/BookingController');
+const {checkAvailability,AddBooking,createOrder,getMybooking,findDashboardIncome,verifyPayment,barberFreeSlots,fetchAllAvailableTimeSlots,fetchUpComeingBooking,fetchAllbookings, getbookings} = require('../Controler/BookingController');
 const { verifyToken } = require('../../Middlewares/AuthMiddleWares/AuthMiddleWare');
 
 // const {checkAvailability,AddBooking,getMybooking} = require('../Controler/BookingController')
@@ -24,5 +24,7 @@ router.route('/getBarberFreeTime').post(barberFreeSlots)
 router.route('/fetchAllAvailableTimeSlots').post(fetchAllAvailableTimeSlots)
 router.route('/fetchUpComingBooking/:id').get(fetchUpComeingBooking)
 router.route('/bookings').get(fetchAllbookings)
+router.route('/bookings/:id').get(getbookings)
+
 
 module.exports = router;

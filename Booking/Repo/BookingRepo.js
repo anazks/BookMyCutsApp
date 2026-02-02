@@ -324,3 +324,17 @@ module.exports.upcomingBooking = async (userId) => {
   }
 };
 
+module.exports.fetchbookingById = async (bookingId) => {
+  try {
+   const bookings = await BookingModel.findById(bookingId)
+  .populate("shopId", "ShopName")        // only shopName from Shop
+  .populate("barberId", "BarberName")          // barber name (assuming 'name' field in Barber model)
+  .populate("userId", "firstName lastName") // firstName + lastName from User
+  .lean(); // optional: returns plain JS objects, easier to manipulate
+   
+  return bookings
+  } catch (error) {
+    console.log(error)
+  }
+}
+

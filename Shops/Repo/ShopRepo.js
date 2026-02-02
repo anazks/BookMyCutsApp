@@ -422,3 +422,42 @@ module.exports.filterShopsByServiceFunction = async (shopIds, serviceName) => {
     throw error;
   }
 };
+
+module.exports.modifyShop = async (shopId,data) => {
+    try {
+        console.log(data ,"shop data")
+        const shop = await ShopModel.findByIdAndUpdate(shopId,data)
+        return shop
+    } catch (error) {
+        console.log(error)
+    }
+}
+
+module.exports.fetchShop = async (shopId) => {
+    try {
+        const shop = await ShopModel.findById(shopId)
+        return shop
+    } catch (error) {
+        console.log(error)
+    }
+}
+
+module.exports.fetchServiceByShopId = async (shopId) => {
+    try {
+        const service = await ServiceModel.find({shopId : shopId })
+        return service
+    } catch (error) {
+        console.error(error)
+    }
+}
+
+module.exports.fetchBarbersByShopId = async (shopId) => {
+    try {
+        console.log("shopId",shopId)
+        const barbers = await BarberModel.find({shopId : shopId })
+        console.log("barbers",barbers)
+        return barbers
+    } catch (error) {
+        console.error(error)
+    }
+}

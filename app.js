@@ -7,6 +7,7 @@ const connectToDatabase = require('./Config/DbConfig')
 const mongoose = require('mongoose');
 const User = require('./Auth/Model/UserModel')
 const cron = require('node-cron')
+const redisClient = require('./Config/redis')
 
 app.use(cors())
 
@@ -59,6 +60,17 @@ const scheduledJob = cron.schedule('0 0 */1 * *', async () => {
 
 // Optional: Start the job manually if needed
 // scheduledJob.start();
+
+
+app.get('/test-redis', async (req, res) => {
+  // Store value
+  await redisClient.set('hello', 'Memurai is working!');
+
+  // Retrieve value
+  const value = await redisClient.get('hello');
+
+  res.json({ message: value });
+});
 
 console.log("Cron job scheduled successfully - will run every 10 minutes");
 

@@ -1,13 +1,14 @@
 const express = require('express');
 const router = express.Router();
 const multer = require('multer')
-const {viewMyshop,viewSingleShopBarbers,viewSingleShopService,myprofile,viewAllBookingOfShops,myShopProfile,AddShop,ViewAllShop,addService,ViewAllServices,addBarber,ViewAllBarbers,viewSigleShop,viewMyService,viewMyBarbers,updateBarber, deleteBarber,makePremium, getAllPremiumShops, saveBankDetails, viewbankDetails, deleteBankDetails, upadateBankdetails,editService, deleteService,findNearByShops,deleteShop,addProfileImage,deleteMedia,updateMediaDetails,search,fetchAllUniqueService,filterShopsByService,viewAllService} = require('../Controller/ShopController')
+const {fetchBookingsByShop,viewMyshop,viewSingleShopBarbers,viewSingleShopService,myprofile,viewAllBookingOfShops,myShopProfile,AddShop,ViewAllShop,addService,ViewAllServices,addBarber,ViewAllBarbers,viewSigleShop,viewMyService,viewMyBarbers,updateBarber, deleteBarber,makePremium, getAllPremiumShops, saveBankDetails, viewbankDetails, deleteBankDetails, upadateBankdetails,editService, deleteService,findNearByShops,deleteShop,addProfileImage,deleteMedia,updateMediaDetails,search,fetchAllUniqueService,filterShopsByService,viewAllService,editShop,getShop, fetchServicebyShop, fetchBarbersbyShop,viewService,delService } = require('../Controller/ShopController')
 const {uploadMedia}  = require('../../Shops/CloudStorageCurds/CloudCurds')
 const upload = require('../../Cloudinary/MulterConfig')
 const WorkingHoursRoutes = require('../Router/WorkingHoursRoutes');
 const { findShoper } = require('../../Auth/Repos/userRepo');
 const PayoutRoutes = require('../Router/PayoutRoutes')
-const {upsertPayoutAccount} = require('../Controller/PayoutController')
+const {upsertPayoutAccount} = require('../Controller/PayoutController');
+const { getAllBookingsOfShop } = require('../Repo/ShopRepo');
 
 router.route('/addShop').post(AddShop)
 router.route('/getMyProfile').get(myprofile)
@@ -17,6 +18,8 @@ router.route('/viewMyshop').get(viewMyshop)
 router.route('/viewMyBooking').get(viewAllBookingOfShops)
 router.route('/findNearByShops').get(findNearByShops)
 router.route('/deleteShop/:id').delete(deleteShop)
+router.route('/shop/:id').put(editShop)
+router.route('/shop/:id').get(getShop)
 // Assuming this is a function
 // router.route('/viewMyShop').get(viewMyShop) // Assuming this is a function
 // router.route('/viewMyShop').get(myShopProfile)
@@ -54,13 +57,21 @@ router.route('/search').get(search)
 router.route('/fetchAllUniqueService').get(fetchAllUniqueService)
 router.route('/filterShopsByService').post(filterShopsByService)
 router.route('/viewAllservice').get(viewAllService)
+router.route('/bookings/:shopId').get(fetchBookingsByShop)
+router.route('/service/:shopId').get(fetchServicebyShop)
+router.route('/barbers/:shopId').get(fetchBarbersbyShop)
 
+router.route('/service').get(viewService)
+router.route('/service/:serviceId').delete(delService)
 router.route('/accounts').post(upsertPayoutAccount)
+
 
  
 
 router.use('/payout',PayoutRoutes)
 router.use('/workingHours',WorkingHoursRoutes)
+
+
 
 
 

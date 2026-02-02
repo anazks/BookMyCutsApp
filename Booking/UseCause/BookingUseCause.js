@@ -3,6 +3,7 @@ const BarberModel = require('../../Shops/Model/BarbarModel')
 const {checkBookings,addBookings,updateBooking,isSlotConflicting} = require('../Repo/BookingRepo')
 const WorkingHours = require('../../Shops/Model/WorkingHours')
 const mongoose = require('mongoose');
+const redisClient = require('../../Config/redis')
 
 module.exports.checkAvailable = async (data) => { 
     try {
@@ -60,23 +61,49 @@ const assignBarber = async (startTime, endTime, bookingDate, shopId) => {
 
 
 module.exports.bookNow = async (data, decodedValue) => {
+  let lockKey = null; // we will set this and clean it in finally
+
   try {
     data.userId = decodedValue.id;
 
-    console.log("BOOKING DATA FROM FRONTEND:",data)
+    console.log("BOOKING DATA FROM FRONTEND:", data);
 
-    // ✅ Extract dates directly from request
-      const startTime = new Date(data.timeSlot.startingTime);
+    // Validate dates
+    const startTime = new Date(data.timeSlot.startingTime);
     const endTime = new Date(data.timeSlot.endingTime);
 
-    console.log("START")
-
-    // 🛡️ Safety check (VERY IMPORTANT)
     if (isNaN(startTime.valueOf()) || isNaN(endTime.valueOf())) {
       throw new Error("Invalid time slot provided");
     }
 
-    // --- STEP 1: CONFLICT CHECK ---
+    // ────────────────────────────────────────────────
+    //           REDIS LOCK – prevent double booking
+    // ────────────────────────────────────────────────
+    
+    // Use SHOP level lock → safe when barberId can be null / auto-assigned
+    const dateStr = data.bookingDate.split('T')[0]; // YYYY-MM-DD
+    const startTimeStr = startTime.toISOString();   // full ISO for precision (or use minutes if you prefer)
+
+    lockKey = `lock:shop:${data.shopId}:${dateStr}:${startTimeStr}`;
+
+    // Try to acquire lock (only one request wins)
+    const lockAcquired = await redisClient.set(lockKey, 'locked', {
+      NX: true,    // set only if NOT exists
+      EX: 20       // 20 seconds – enough for payment flow start + safety
+    });
+
+    if (!lockAcquired) {
+      throw new Error(
+        "This time slot is being booked right now by someone else. " +
+        "Please wait 5–10 seconds and try again."
+      );
+    }
+
+    // ────────────────────────────────────────────────
+    //           CRITICAL SECTION – only one at a time
+    // ────────────────────────────────────────────────
+
+    // Step 1: Check for conflict (double safety)
     const hasConflict = await isSlotConflicting(
       data.barberId,
       data.bookingDate,
@@ -88,25 +115,26 @@ module.exports.bookNow = async (data, decodedValue) => {
       throw new Error("This time slot is already booked by someone else.");
     }
 
-
+    // Step 2: Assign barber if not selected
     if (!data.barberId) {
-  const barber = await assignBarber(
-    startTime,
-    endTime,
-    data.bookingDate,
-    data.shopId
-  );
+      const barber = await assignBarber(
+        startTime,
+        endTime,
+        data.bookingDate,
+        data.shopId
+      );
 
-  data.barberId = barber ? barber._id : null;
+      if (!barber) {
+        throw new Error("No available barber found for this time.");
+      }
 
+      data.barberId = barber._id;
+      console.log("Auto-assigned barber ID:", data.barberId);
+    }
 
-  console.log("ASSIGNED BARBER ID:", data.barberId);
-}
-
-    // --- STEP 2: PREPARE BOOKING DATA ---
+    // Step 3: Prepare booking data
     const bookingData = {
       barberId: new mongoose.Types.ObjectId(data.barberId),
-
       userId: new mongoose.Types.ObjectId(data.userId),
       shopId: new mongoose.Types.ObjectId(data.shopId),
 
@@ -119,7 +147,6 @@ module.exports.bookNow = async (data, decodedValue) => {
       })) || [],
 
       bookingDate: new Date(data.bookingDate),
-
       timeSlot: {
         startingTime: startTime,
         endingTime: endTime
@@ -134,27 +161,39 @@ module.exports.bookNow = async (data, decodedValue) => {
       currency: data.currency,
 
       bookingTimestamp: new Date(),
-
       bookingStatus: "pending",
       paymentStatus:
         data.paymentType === "advance"
           ? (data.remainingAmount > 0 ? "partial" : "paid")
           : "unpaid",
 
-      amountPaid:
-        data.paymentType === "advance" ? data.amountToPay : 0,
+      amountPaid: data.paymentType === "advance" ? data.amountToPay : 0,
 
       createdAt: new Date()
     };
-    console.log("BOOKING DATA -",bookingData)
 
-    // --- STEP 3: SAVE ---
+    console.log("Final BOOKING DATA to save:", bookingData);
+
+    // Step 4: Save to database
     const newBooking = await addBookings(bookingData);
+
+    // ────────────────────────────────────────────────
+    //           RELEASE THE LOCK
+    // ────────────────────────────────────────────────
+    await redisClient.del(lockKey);
+
     return newBooking;
 
   } catch (error) {
+    // Always release lock if we got it (even on error)
+    if (lockKey) {
+      await redisClient.del(lockKey).catch(() => {
+        console.log("Lock release failed (already gone or error)");
+      });
+    }
+
     console.error("Booking error:", error.message);
-    throw error;
+    throw error; // let the controller catch it and send 401/400
   }
 };
 

@@ -1,7 +1,7 @@
 const asyncHandler = require("express-async-handler");
 const { registerUserUseCase,loginuserUsecause,registerShoperUseCase,loginShoperUsecause,sendOtpmobileNo,verifyOtpFunction } = require("../UseCauses/userUseCause");
 const decorder = require("../../TokenDecoder/Decoder");
-const {getUserProfile,deleteUserFunction,getAllShopOwners, updatePassword} = require("../Repos/userRepo")
+const {getUserProfile,deleteUserFunction,getAllShopOwners, updatePassword,fetchUsers,findUser,modifyShopOwner,deleteShopOwner} = require("../Repos/userRepo")
 const bcrypt = require('bcryptjs')
 const jwt = require('jsonwebtoken');
 const otpModel = require('../Model/OtpModel')
@@ -96,10 +96,23 @@ const userModel = require('../Model/UserModel');
 const ShoperModel = require("../Model/ShoperModel");
 const Decoder = require("../../TokenDecoder/Decoder");
 const { error } = require("console");
-const getUsers = asyncHandler(async(req,res)=>{
-    let users = await userModel.find({})
-    res.json(users)
-})
+const { LookupRequestWithCorId } = require("twilio/lib/rest/lookups/v2/query");
+
+
+const getUsers = async (req,res) => {
+  try {
+      const page = parseInt(req.query.page)
+      const limit = parseInt(req.query.page)
+      const users = await fetchUsers(page,limit)
+        res.status(200).json({
+        success:true,
+        message:"succesfully fetched users",
+        users
+      })
+  } catch (error) {
+    console.error('failed to fetch users',error)
+  }
+}
 
 const getProfile = asyncHandler(async (req, res) => {
     let token = req.headers['authorization']?.split(' ')[1];
@@ -508,6 +521,82 @@ const resetPassword = async (req,res) => {
    console.log(error)
   }
 }
+ 
+const fetchUser = async (req,res) => {
+  try {
+    const userId = req.params.id
+    const user = await findUser(userId)
+    if(user){
+      res.status(200).json({
+        success:true,
+        message:"successfully get user data",
+        user
+      })
+    }else{
+      res.status(404).json({
+        success:false,
+        messsage:"failed to get shop owner"
+      })
+    }
+  } catch (error) {
+    console.log(error)
+    res.status(500).json({
+      success:false,
+      message:"internal server error"
+    })
+  }
+}
+
+const removeShopOwner = async (req,res) => {
+  try {
+    const userId = req.params.id
+    const user = deleteShopOwner(userId)    
+    if(user){
+      res.status(200).json({
+        success:true,
+        message:"successfully deleted user",
+        user
+      })
+    }else{
+      res.statu(404).json({
+        success:false,
+        message:"deletion failed"
+      })
+    }
+  } catch (error) {
+    console.log(error)
+    res.status(500).json({
+      success:false,
+      message:"internar server error"
+    })
+  }
+}
+
+const updateShopOwner = async (req,res) => {
+  try {
+    const userId = req.params.id
+    const updatedData = req.body
+    const shopOwner = await modifyShopOwner(userId,updatedData)
+    if(shopOwner){
+      res.status(200).json({
+        success:true,
+        message:"successfully updated shop owner",
+        shopOwner
+      })
+    }else{
+      res.status(404).json({
+        success:false,
+        message:"failed update shop owner"
+      })
+    }
+  } catch (error) {
+    res.status(500).json({
+      success:false,
+      message:"internal server error"
+    })
+    console.log(error)
+  }
+}
 
 
-module.exports = {resetPassword,verifyForgotPasswordOtp,forgotPassword,viewAllShopOwners,deleteUser,userRegistration,userLogin,ShopRegister,login,getUsers,getProfile,otpRequest,verifyOtp}
+module.exports = {updateShopOwner,removeShopOwner,resetPassword,verifyForgotPasswordOtp,forgotPassword,viewAllShopOwners,deleteUser,userRegistration,userLogin,ShopRegister,login,getUsers,getProfile,otpRequest,verifyOtp,fetchUser}

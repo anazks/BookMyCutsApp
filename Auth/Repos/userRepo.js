@@ -106,4 +106,69 @@ module.exports.updatePassword = async (password, email, role) => {
   }
 };
 
+module.exports.fetchUsers = async (page,limit) => {
+  try {
+    const skip = (page - 1) * limit
+    const users = await shoperModel.find({}).
+                     sort({ createdAt:-1}).
+                                skip(skip).
+                              limit(limit)
+    return users                        
+  } catch (error) {
+    console.log(error)
+  }
+}
+
+module.exports.findUser = async (userId) => {
+  try {
+    console.log(userId, "userId");
+    const owner = await shoperModel.findById(userId);
+    if (!owner) {
+      return null;
+    }
+    const shop = await ShopModel.findOne({
+      ShopOwnerId: owner._id
+    });
+    console.log("shop:",shop)
+ return {
+  owner,
+  shopId: shop?._id  // optional chaining in case shop is null
+};
+  } catch (error) {
+    console.error("findUser error:", error);
+    throw error;
+  }
+};
+
+
+module.exports.deleteShopOwner = async (userId) => {
+  try {
+    const user = await shoperModel.findByIdAndDelete(userId)
+    return  user
+  } catch (error) {
+    console.log(error)
+  }
+}
+
+module.exports.modifyShopOwner = async (userId, updatedData) => {
+  try {
+    // { new: true } returns the updated document
+      const updatedUser = await shoperModel.findByIdAndUpdate(
+      userId,
+      updatedData,        // object containing fields to update
+      { new: true, runValidators: true } // returns updated doc and validates fields
+    );
+    
+    console.log(updatedUser, "shop owner data")
+  
+
+    return updatedUser;
+  } catch (error) {
+    console.log(error);
+    throw error;
+  }
+};
+
+
+
 

@@ -1,8 +1,11 @@
 const asyncHandler = require("express-async-handler");
 const jwt = require('jsonwebtoken');
 const  SaveProfileToCloud  = require('../CloudStorageCurds/SaveProfileToCloude')
+const {modifyShop, fetchShop,fetchBarberseByShopId,fetchServiceByShopId,fetchBarbersByShopId} = require('../Repo/ShopRepo')
 const secretkey = process.env.secretKey;
 const ServiceModel = require('../Model/ServiceModel')
+const mongoose = require('mongoose');
+
 
 const {
     updateBankDetailsFunction,
@@ -41,6 +44,7 @@ const { json } = require("express");
 const { convertToGeocode,findNearestShops } = require('../UseCase/useCaseShop');
 const { TrunkContextImpl } = require("twilio/lib/rest/routes/v2/trunk");
 const ShopModel = require("../Model/ShopModel");
+const BookingModel = require("../../Booking/Models/BookingModel");
 
 const AddShop = asyncHandler(async (req, res) => {
     const data = req.body;
@@ -1086,10 +1090,304 @@ const viewAllService = async (req,res) => {
   }
 }
 
+const editShop = async (req,res) => {
+    try {
+        const shopId = req.params.id
+        const data = req.body
+        const shop = await modifyShop(shopId,data)
+        if(shop){
+            res.status(200).json({
+                success:true,
+                message:"successfully updated the shop",
+                shop
+            })
+        }else{
+            res.status(404).json({
+                success:false,
+                message:"failed to updated shop"
+            })
+        }
+    } catch (error) {
+        console.log(error)
+        res.status(500).json({
+            success:false,
+            message:"internal server error"
+        })
+    }
+}
+
+const getShop = async (req,res) => {
+    try {
+        const shopId = req.params.id
+
+        const shop = await fetchShop(shopId)
+
+        if(shop){
+            res.status(200).json({
+                success:true,
+                message:"successfully fetch the shop",
+                shop
+            })
+        }else{
+            res.status(404).json({
+                success:false,
+                message:"failed to fetch shop"
+            })
+        }
+    } catch (error) {
+        console.log(error)
+        res.status(500).json({
+            success:false,
+            message:"internal server error"
+        })
+    }
+}
+
+const fetchBookingsByShop = async (req, res) => {
+  try {
+    const page = Number(req.query.page) || 1;
+    const limit = Number(req.query.limit) || 10;
+    const skip = (page - 1) * limit;
+
+    const { shopId } = req.params;
+
+    if (!shopId) {
+      return res.status(400).json({
+        success: false,
+        message: "shopId parameter is required in the URL",
+      });
+    }
+
+    console.log(`[fetchBookingsByShop] shopId received: ${shopId} (type: ${typeof shopId})`);
+
+    const {
+      date,
+      startDate,
+      endDate,
+      period,
+      bookingStatus,
+      paymentStatus,
+    } = req.query;
+
+    // ────────────────────────────────────────────────
+    // Decide which field name to use for the shop reference
+    // Try these common names in order — change priority according to YOUR schema
+    // ────────────────────────────────────────────────
+    const possibleShopFields = ['shopId', 'shop', 'store', 'storeId', 'vendor', 'vendorId'];
+
+    let shopFieldName = null;
+    let shopValue = shopId;
+
+    // If it's likely an ObjectId → convert it
+    if (mongoose.Types.ObjectId.isValid(shopId)) {
+      shopValue = new mongoose.Types.ObjectId(shopId);
+      console.log(`[fetchBookingsByShop] shopId is valid ObjectId → converting`);
+    }
+
+    // You can hard-code the correct field name here once you know it
+    // For now — we try to be flexible during debugging
+    shopFieldName = 'shopId';           // ←←← MOST COMMON — change this to match your schema
+    // shopFieldName = 'shop';          // use this if it's a reference field
+    // shopFieldName = 'storeId';
+
+    let filter = {
+      [shopFieldName]: shopValue,
+    };
+
+    // Status filters
+    if (bookingStatus) filter.bookingStatus = bookingStatus;
+    if (paymentStatus) filter.paymentStatus = paymentStatus;
+
+    // ────────────────────────────────────────────────
+    //        Date / Period filtering
+    // ────────────────────────────────────────────────
+    if (date || (startDate && endDate) || period) {
+      let startOfRange, endOfRange;
+
+      const now = new Date();
+
+      if (date) {
+        startOfRange = new Date(date);
+        startOfRange.setHours(0, 0, 0, 0);
+
+        endOfRange = new Date(date);
+        endOfRange.setHours(23, 59, 59, 999);
+      } 
+      else if (startDate && endDate) {
+        startOfRange = new Date(startDate);
+        startOfRange.setHours(0, 0, 0, 0);
+
+        endOfRange = new Date(endDate);
+        endOfRange.setHours(23, 59, 59, 999);
+      } 
+      else if (period) {
+        if (period === 'today') {
+          startOfRange = new Date(now);
+          startOfRange.setHours(0, 0, 0, 0);
+          endOfRange = new Date(now);
+          endOfRange.setHours(23, 59, 59, 999);
+        } 
+        else if (period === 'lastWeek') {
+          startOfRange = new Date(now);
+          startOfRange.setDate(now.getDate() - 7);
+          startOfRange.setHours(0, 0, 0, 0);
+          endOfRange = new Date(now);
+          endOfRange.setHours(23, 59, 59, 999);
+        } 
+        else if (period === 'lastMonth') {
+          startOfRange = new Date(now);
+          startOfRange.setMonth(now.getMonth() - 1);
+          startOfRange.setHours(0, 0, 0, 0);
+          endOfRange = new Date(now);
+          endOfRange.setHours(23, 59, 59, 999);
+        }
+      }
+
+      if (startOfRange && endOfRange) {
+        filter.bookingDate = { $gte: startOfRange, $lte: endOfRange };
+      }
+    }
+
+    // ────────────────────────────────────────────────
+    //               DEBUGGING LOGS
+    // ────────────────────────────────────────────────
+    console.log('[fetchBookingsByShop] Final filter:');
+    console.log(JSON.stringify(filter, null, 2));
+
+    // Quick existence check — very useful during debugging
+    const quickCheck = await BookingModel.findOne({ [shopFieldName]: shopValue });
+    console.log(`[fetchBookingsByShop] Found at least one booking for this shop? → ${!!quickCheck}`);
+
+    if (quickCheck) {
+      console.log('[fetchBookingsByShop] Sample booking _id:', quickCheck._id);
+      console.log('[fetchBookingsByShop] Sample booking date:', quickCheck.bookingDate);
+    }
+
+    // ────────────────────────────────────────────────
+    //               MAIN QUERIES
+    // ────────────────────────────────────────────────
+    const total = await BookingModel.countDocuments(filter);
+
+    const bookings = await BookingModel.find(filter)
+      .skip(skip)
+      .limit(limit)
+      .sort({ bookingDate: -1 })
+      // .populate('customer', 'name phone')     // uncomment if needed
+      // .populate('service', 'name price')
+      .lean();   // faster if you don't need mongoose documents
+
+    console.log(`[fetchBookingsByShop] Found ${bookings.length} bookings on this page`);
+
+    return res.status(200).json({
+      success: true,
+      message: "Bookings fetched successfully",
+      shopId,
+      shopFieldUsed: shopFieldName,
+      total,
+      page,
+      totalPages: Math.ceil(total / limit),
+      countThisPage: bookings.length,
+      bookings,
+    });
+
+  } catch (error) {
+    console.error('[fetchBookingsByShop] Error:', error);
+    return res.status(500).json({
+      success: false,
+      message: "Server error while fetching bookings",
+      error: error.message,
+    });
+  }
+};
+
+const fetchServicebyShop = async (req,res) => {
+    try {
+        const shopId = req.params.shopId
+        console.log("shopId in controller",shopId)
+        const service = await fetchServiceByShopId(shopId)
+        if(service){
+            res.status(200).json({
+                success:true,
+                message:"successfull fetched service",
+                service
+            })
+        }else{
+            res.status(404).json({
+                success:false,
+                message:"failed to fetch service"
+            })
+        }
+    } catch (error) {
+        console.error("error in fetching serive",error)
+        res.status(500).json({
+            success:false,
+            message:"internal server error"
+        })
+    }
+}
+
+const fetchBarbersbyShop = async (req,res) => {
+    try {
+        const shopId = req.params.shopId
+        const service = await fetchBarbersByShopId(shopId)
+        if(service){
+            res.status(200).json({
+                success:true,
+                message:"successfull fetched barbers",
+                service
+            })
+        }else{
+            res.status(404).json({
+                success:false,
+                message:"failed to fetch barbers"
+            })
+        }
+    } catch (error) {
+        console.error("error in fetching serive",error)
+        res.status(500).json({
+            success:false,
+            message:"internal server error"
+        })
+    }
+}
+
+const viewService = async (req,res) => {
+    try {
+       const service = await ServiceModel.find({}) 
+       res.status(200).json({
+        success:true,
+        message:"successfully fetched all service",
+        service
+       })
+    } catch (error) {
+        console.log(error)
+    }
+}
+
+const delService = async (req,res) => {
+    try {
+        const serviceId = req.params.serviceId
+        const service = await ServiceModel.findByIdAndDelete(serviceId)
+       res.status(200).json({
+        success:true,
+        message:"successfully delete  service",
+        service
+       })
+    } catch (error) {
+        console.log(error)
+    }
+}
 
 
 
 module.exports = {
+    delService,
+    viewService,
+    fetchServicebyShop,
+    fetchBarbersbyShop,
+    fetchBookingsByShop,
+    getShop,
+    editShop,
     viewAllService,
     filterShopsByService,
     fetchAllUniqueService,

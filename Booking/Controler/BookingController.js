@@ -1,6 +1,6 @@
 const Decoder = require('../../TokenDecoder/Decoder')
 const {checkAvailble,bookNow,bookingCompletion,getBarberFullSchedule,getShopAvailableSlots} = require('../UseCause/BookingUseCause')
-const {myBooking,findDashboardIncomeFunction,upcomingBooking} = require('../Repo/BookingRepo')
+const {myBooking,findDashboardIncomeFunction,upcomingBooking,fetchbookingById} = require('../Repo/BookingRepo')
 const RazorPay = require('../../Razorpay/RazorpayConfig')
 const mongoose = require('mongoose');
 const { trace } = require('../Router/BookingRouter');
@@ -388,42 +388,146 @@ const sendConfirmationMail = async (bookingId, email) => {
   }
 };
 
-const fetchAllbookings = async (req,res) => {
+// bookingController.js
+
+const fetchAllbookings = async (req, res) => {
+  try {
+    const page = Number(req.query.page) || 1;
+    const limit = Number(req.query.limit) || 10;
+    const skip = (page - 1) * limit;
+
+    const {
+      date,
+      startDate,
+      endDate,
+      period,
+      bookingStatus,
+      paymentStatus
+    } = req.query;
+
+    let filter = {};
+
+    // 🔹 Booking status
+    if (bookingStatus) {
+      filter.bookingStatus = bookingStatus;
+    }
+
+    // 🔹 Payment status
+    if (paymentStatus) {
+      filter.paymentStatus = paymentStatus;
+    }
+
+    /* =======================
+       📅 DATE FILTER LOGIC
+    ======================= */
+
+    // 1️⃣ Single day (calendar click)
+    if (date) {
+      const start = new Date(date);
+      start.setHours(0, 0, 0, 0);
+
+      const end = new Date(date);
+      end.setHours(23, 59, 59, 999);
+
+      filter.bookingDate = { $gte: start, $lte: end };
+    }
+
+    // 2️⃣ Custom date range
+    else if (startDate && endDate) {
+      const start = new Date(startDate);
+      start.setHours(0, 0, 0, 0);
+
+      const end = new Date(endDate);
+      end.setHours(23, 59, 59, 999);
+
+      filter.bookingDate = { $gte: start, $lte: end };
+    }
+
+    // 3️⃣ Quick filters (today / lastWeek / lastMonth)
+    else if (period) {
+      const now = new Date();
+      let start, end;
+
+      if (period === "today") {
+        start = new Date();
+        start.setHours(0, 0, 0, 0);
+
+        end = new Date();
+        end.setHours(23, 59, 59, 999);
+      }
+
+      if (period === "lastWeek") {
+        end = new Date();
+        start = new Date();
+        start.setDate(start.getDate() - 7);
+      }
+
+      if (period === "lastMonth") {
+        end = new Date();
+        start = new Date();
+        start.setMonth(start.getMonth() - 1);
+      }
+
+      if (start && end) {
+        filter.bookingDate = { $gte: start, $lte: end };
+      }
+    }
+
+    /* ======================= */
+
+    const total = await BookingModel.countDocuments(filter);
+
+    const bookings = await BookingModel.find(filter)
+      .skip(skip)
+      .limit(limit)
+      .sort({ bookingDate: -1 });
+
+    res.status(200).json({
+      success: true,
+      message: "Successfully fetched bookings",
+      total,
+      page,
+      totalPages: Math.ceil(total / limit),
+      bookings
+    });
+
+  } catch (error) {
+    console.error("error in fetchAllBookings", error);
+    res.status(500).json({
+      success: false,
+      message: "Internal server error"
+    });
+  }
+};
+
+
+const getbookings = async (req,res) => {
     try {
-        const page = Number(req.query.page) || 1;
-        const limit = Number(req.query.limit) || 10;
-
-        const skip = (page - 1) * limit;
-
-        const total = await BookingModel.countDocuments();
-
-        const bookings = await BookingModel.find()
-        .skip(skip)
-        .limit(limit)
-        .sort({ createdAt: -1 });
-        
+        const bookingId = req.params.id
+        const bookings = await fetchbookingById(bookingId)
         if(bookings){
-            res.status(200).json({
+            return res.status(200).json({
                 success:true,
-                message:"successfully fetch all bookings",
+                message:"successfully fetch bookings",
                 bookings
             })
-        }else{
-            res.status(404).json({
-                success:false,
-                message:"failed to fetch bookings"
-            })
         }
-
+            return res.status(404).json({
+            success:false,
+            message:"failed to fetch bookings",
+        })
     } catch (error) {
+        console.log(error)
         res.status(500).json({
             success:false,
             message:"internal server error"
         })
-        console.error("error in fetchAllBooking",error)
     }
 }
 
-module.exports = {findShopByService,fetchUpComeingBooking,checkAvailability,AddBooking,getMybooking,createOrder,findDashboardIncome,verifyPayment,barberFreeSlots,fetchAllAvailableTimeSlots,fetchAllbookings}
+
+
+
+module.exports = {getbookings,findShopByService,fetchUpComeingBooking,checkAvailability,AddBooking,getMybooking,createOrder,findDashboardIncome,verifyPayment,barberFreeSlots,fetchAllAvailableTimeSlots,fetchAllbookings}
 
 
