@@ -9,8 +9,7 @@ const { findShoper } = require('../../Auth/Repos/userRepo');
 const PayoutRoutes = require('../Router/PayoutRoutes')
 const {upsertPayoutAccount} = require('../Controller/PayoutController');
 const { getAllBookingsOfShop } = require('../Repo/ShopRepo');
-const BarberModel = require('../Model/BarbarModel')
-const ShopModel = require('../Model/ShopModel')
+
 
 router.route('/addShop').post(AddShop)
 router.route('/getMyProfile').get(myprofile)
@@ -64,84 +63,7 @@ router.route('/service/:shopId').get(fetchServicebyShop)
 router.route('/barbers/:shopId').get(fetchBarbersbyShop)
 
 
-router.post('/migrate/shop-isActive', async (req, res) => {
-  try {
-    // Optional: Add authentication/authorization
-    // if (!req.user.isAdmin) return res.status(403).json({ error: 'Unauthorized' });
-    
-    console.log('Starting shop isActive migration...');
-    
-    // Get all shop IDs from barbers collection
-    const barberShops = await BarberModel.aggregate([
-      {
-        $group: {
-          _id: "$shopId",
-          barberCount: { $sum: 1 }
-        }
-      }
-    ]);
-    
-    const shopIdsWithBarbers = barberShops.map(b => b._id);
-    console.log(`Found ${shopIdsWithBarbers.length} shops with barbers`);
-    
-    // Update shops WITH barbers to isActive: true
-    const updateActive = await ShopModel.updateMany(
-      { 
-        _id: { $in: shopIdsWithBarbers },
-        $or: [
-          { isActive: { $exists: false } },
-          { isActive: false }
-        ]
-      },
-      { $set: { isActive: true } }
-    );
-    
-    // Update shops WITHOUT barbers to isActive: false
-    const allShopIds = await ShopModel.find({}, '_id');
-    const allShopIdsStr = allShopIds.map(s => s._id.toString());
-    
-    // Find shops that don't have barbers
-    const shopIdsWithoutBarbers = allShopIdsStr.filter(
-      shopId => !shopIdsWithBarbers.includes(shopId)
-    );
-    
-    const updateInactive = await ShopModel.updateMany(
-      { 
-        _id: { $in: shopIdsWithoutBarbers },
-        $or: [
-          { isActive: { $exists: false } },
-          { isActive: true }
-        ]
-      },
-      { $set: { isActive: false } }
-    );
-    
-    // Get final counts
-    const activeCount = await ShopModel.countDocuments({ isActive: true });
-    const inactiveCount = await ShopModel.countDocuments({ isActive: false });
-    const totalShops = await ShopModel.countDocuments();
-    
-    res.json({
-      success: true,
-      message: 'Migration completed successfully',
-      stats: {
-        totalShops,
-        activeShops: activeCount,
-        inactiveShops: inactiveCount,
-        updatedToActive: updateActive.modifiedCount,
-        updatedToInactive: updateInactive.modifiedCount
-      }
-    });
-    
-  } catch (error) {
-    console.error('Migration error:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Migration failed',
-      details: error.message
-    });
-  }
-});
+
 
 router.route('/service').get(viewService)
 router.route('/service/:serviceId').delete(delService)
