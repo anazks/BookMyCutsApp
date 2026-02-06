@@ -33,9 +33,11 @@ module.exports.addShop = async (data) => {
 
 module.exports.viewAllShops = async () => {
     try {
-        return await ShopModel.find();
+        // Return only shops where isActive is true
+        return await ShopModel.find({ isActive: true });
     } catch (error) {
         console.log(error);
+        throw error; // Better to throw error for handling upstream
     }
 }
 
@@ -55,6 +57,7 @@ module.exports.viewAllServices = async () => {
 }
 module.exports.addBarbers = async (data) => {
     try {
+        console.log("DATA OF BARBER",data)
         return await BarberModel.create(data);
     } catch (error) {
         console.log(error);   
@@ -93,57 +96,49 @@ module.exports.getMyBarbers = async(id)=>{
 }
 
 
-module.exports.getAllBookingsOfShop = async (shopOwnerId) => {
+module.exports.getAllBookingsOfShop = async (
+  shopOwnerId,
+  page = 1,
+  limit = 10
+) => {
   try {
-    // Step 1: Find shops owned by the given shopOwnerId
-    const shops = await ShopModel.find({ ShopOwnerId: shopOwnerId }).lean();
+    // 1️⃣ Find shops of owner
+    const shops = await ShopModel.find(
+      { ShopOwnerId: shopOwnerId },
+      { _id: 1 }
+    ).lean();
 
-    // Step 2: Extract their _id values as strings
-    const shopIds = shops.map(shop => shop._id.toString());
-
-    if (shopIds.length === 0) {
-      return []; // No shops found for this owner
+    if (!shops.length) {
+      return { bookings: [], total: 0 };
     }
 
-    // Step 3: Find bookings for those shop IDs
-    const bookings = await BookingModel.find({
-      shopId: { $in: shopIds }
-    }).lean();
+    const shopIds = shops.map(shop => shop._id);
 
-    // Step 4: Attach shopDetails to each booking
-    const shopMap = {};
-    shops.forEach(shop => {
-      shopMap[shop._id.toString()] = shop;
-    });
+    const skip = (page - 1) * limit;
 
-    // Step 5: Get all userIds from bookings
-    const userIds = [...new Set(bookings.map(b => b.userId))]; // Remove duplicates
+    // 2️⃣ Fetch bookings with pagination
+    const [bookings, total] = await Promise.all([
+      BookingModel.find({ shopId: { $in: shopIds } })
+        .populate("userId", "firstName")
+        .populate("barberId", "BarberName")
+        .populate("shopId", "shopName")
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean(),
 
-    // Step 6: Get all users for those IDs
-    const users = await UserModel.find({
-      _id: { $in: userIds }
-    }).lean();
+      BookingModel.countDocuments({ shopId: { $in: shopIds } })
+    ]);
 
-    // Step 7: Create a map for user lookup
-    const userMap = {};
-    users.forEach(user => {
-      userMap[user._id.toString()] = user;
-    });
-
-    // Step 8: Combine all data
-    const bookingsWithDetails = bookings.map(booking => ({
-      ...booking,
-      shopDetails: shopMap[booking.shopId] || null,
-      userDetails: userMap[booking.userId] || null
-    }));
-
-    return bookingsWithDetails;
+    return { bookings, total };
 
   } catch (error) {
     console.error("Error in getAllBookingsOfShop:", error);
-    return null;
+    return { bookings: [], total: 0 };
   }
 };
+
+
 
 module.exports.getShopUser = async (shopId) => {
     try {
@@ -310,15 +305,16 @@ module.exports.findNearbyShopsFunction = async (lng, lat, radius) => {
                     },
                     distanceField: "distance",
                     spherical: true,
-                    maxDistance: radius  // ✅ Use the passed radius, not hardcoded 5000
+                    maxDistance: radius,
+                    query: { isActive: true } // ✅ Filter during geo search
                 }
             },
-            { $limit: 50 } 
+            { $limit: 50 }
         ]);
         return shops;
     } catch (error) {
         console.error("Error in findNearbyShopsFunction:", error);
-        throw error; // Re-throw so calling function can handle
+        throw error;
     }
 }
 
@@ -461,3 +457,25 @@ module.exports.fetchBarbersByShopId = async (shopId) => {
         console.error(error)
     }
 }
+
+
+module.exports.LocationAndNameOfOwner = async (shopOwnerId, shopId) => {
+  try {
+    console.log(shopId, shopOwnerId, "IDs");
+
+    const shopOwnerData = await ShopModel
+      .findOne({
+        _id: new mongoose.Types.ObjectId(shopId),
+        ShopOwnerId: new mongoose.Types.ObjectId(shopOwnerId)
+      })
+      .populate('ShopOwnerId', 'firstName lastName')
+      .select('ExactLocation ShopOwnerId');
+    console.log(shopOwnerData, "SHOP OWNER DATA IN REPO");
+    return shopOwnerData;
+  } catch (error) {
+    console.error("LocationAndNameOfOwner error:", error);
+    throw error;
+  }
+
+}
+

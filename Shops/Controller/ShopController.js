@@ -1,9 +1,10 @@
 const asyncHandler = require("express-async-handler");
 const jwt = require('jsonwebtoken');
 const  SaveProfileToCloud  = require('../CloudStorageCurds/SaveProfileToCloude')
-const {modifyShop, fetchShop,fetchBarberseByShopId,fetchServiceByShopId,fetchBarbersByShopId} = require('../Repo/ShopRepo')
+const {modifyShop, fetchShop,fetchBarberseByShopId,fetchServiceByShopId,fetchBarbersByShopId,LocationAndNameOfOwner} = require('../Repo/ShopRepo')
 const secretkey = process.env.secretKey;
 const ServiceModel = require('../Model/ServiceModel')
+const BarbarModel = require('../Model/BarbarModel')
 const mongoose = require('mongoose');
 
 
@@ -45,6 +46,24 @@ const { convertToGeocode,findNearestShops } = require('../UseCase/useCaseShop');
 const { TrunkContextImpl } = require("twilio/lib/rest/routes/v2/trunk");
 const ShopModel = require("../Model/ShopModel");
 const BookingModel = require("../../Booking/Models/BookingModel");
+const { error } = require("ajv/dist/vocabularies/applicator/dependencies");
+
+
+const updateShopActiveStatus = async (shopId) => {
+  if (!shopId) {
+    throw new Error("shopId is required");
+  }
+
+  const barberCount = await BarbarModel.countDocuments({ shopId });
+  const isActive = barberCount > 0;
+
+  await ShopModel.findByIdAndUpdate(shopId, {
+    isActive
+  });
+
+  return isActive;
+};
+
 
 const AddShop = asyncHandler(async (req, res) => {
     const data = req.body;
@@ -154,6 +173,7 @@ const ViewAllShop = asyncHandler(async (req, res) => {
 
 const addService = asyncHandler(async (req, res) => {
     const data = req.body;
+    console.log('duration',data)
     if (!data) {
         return res.status(400).json({
             success: false,
@@ -225,7 +245,10 @@ const ViewAllServices = asyncHandler(async (req, res) => {
 
 const addBarber = asyncHandler(async (req, res) => {
     const data = req.body;
+    const { shopId } = data
+    console.log(shopId,"SHOPID -------------------")
     console.log("addBarber requesting data:",data)
+
     if (!data) {
         return res.status(400).json({
             success: false,
@@ -244,8 +267,12 @@ const addBarber = asyncHandler(async (req, res) => {
     try {
         const decoded = jwt.verify(token, secretkey);
         data.shoperId = decoded.id;
+        
 
         const addedBarber = await addBarbers(data);
+        console.log("ADDED BARBER:",addedBarber)
+        const isActive = await updateShopActiveStatus(shopId)
+        console.log("isActive",isActive)
         if (addedBarber) {
             return res.status(201).json({
                 success: true,
@@ -383,25 +410,40 @@ const viewMyBarbers = asyncHandler(async (req, res) => {
 });
 
 const viewAllBookingOfShops = asyncHandler(async (req, res) => {
-    try {
-        const token = req.headers['authorization']?.split(' ')[1];
-        const tokenData = await Decoder(token);
-        console.log(tokenData)
-        const bookings = await getAllBookingsOfShop(tokenData.id);
-        console.log(bookings)
-        return res.status(200).json({
-            success: true,
-            message: "Bookings retrieved successfully",
-            data: bookings
-        });
-    } catch (error) {
-        console.error("Error fetching bookings:", error);
-        return res.status(500).json({
-            success: false,
-            message: "Internal server error"
-        });
-    }
+  try {
+    const token = req.headers['authorization']?.split(' ')[1];
+    const tokenData = await Decoder(token);
+
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+
+    const { bookings, total } = await getAllBookingsOfShop(
+      tokenData.id,
+      page,
+      limit
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: "Bookings retrieved successfully",
+      pagination: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit)
+      },
+      data: bookings
+    });
+
+  } catch (error) {
+    console.error("Error fetching bookings:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error"
+    });
+  }
 });
+
 
 const myprofile = asyncHandler(async (req, res) => {
     const token = req.headers['authorization']?.split(' ')[1];
@@ -537,6 +579,7 @@ const updateBarber = async (req,res) => {
         const barberId = req.params.id
         let data = req.body
         const barber = await editBarberProfile(barberId,data)
+        await updateShopActiveStatus
         console.log("edited document:",barber)
         if(!barber || barber.lenght === 0){
              return res.status(404).json({
@@ -562,7 +605,10 @@ const updateBarber = async (req,res) => {
 const deleteBarber = async (req, res) => {
   try {
     const barberId = req.params.id
+    const shopId = req.params.shopId
     const barber = await deleteBarberFunction(barberId)
+    const isActive =  await updateShopActiveStatus(shopId)
+    console.log("isActive",isActive)
 
     if (!barber) {
       // nothing was deleted because document not found
@@ -824,7 +870,7 @@ const editService = async (req,res) => {
    }
  }
 
-const findNearByShops = async (req,res) => {
+ const findNearByShops = async (req,res) => {
     try {
         const {lng,lat} = req.query
         console.log("COORDINATES")
@@ -989,7 +1035,9 @@ const search = async (req, res) => {
 
         // 2. If no shops found by name, try Geocoding
         if (shops.length === 0) {
+            console.log("entered in location search")
             const coords = await geocodeTextToCoords(q);
+            console.log("COORDS",coords)
             
             if (coords) {
                 const { lat, lng } = coords;
@@ -1378,9 +1426,60 @@ const delService = async (req,res) => {
     }
 }
 
+const createAsBarber = async (req,res) => {
+        try {
+        const shopId = req.params.shopId
+        const token = req.headers['authorization']?.split(' ')[1];
+        if (!token) {
+            return res.status(401).json({
+                success: false,
+                message: "No token provided"
+            });
+        }
+        const tokenData = await Decoder(token);
+        console.log("TOKEN DATA:",tokenData)
+        const shopOwnerId = tokenData.id
+        const shopOwner = await LocationAndNameOfOwner(shopOwnerId, shopId);
+        console.log(shopOwner, "SHOP OWNER");
+        const transformToBarberPayload = (shopOwner,shopOwnerId) => {
+        return {
+            BarberName: `${shopOwner.ShopOwnerId.firstName}${shopOwner.ShopOwnerId.lastName}`,
+            From: shopOwner.ExactLocation,
+            shopId:shopOwner._id,
+            shoperId: shopOwnerId
+        };
+        };
+        const barberPayload = transformToBarberPayload(shopOwner,shopOwnerId    );
+
+
+        const shopOwnerToBarber = await addBarbers(barberPayload)
+        const isActive = await updateShopActiveStatus(shopId)
+        if(shopOwnerToBarber){
+            res.status(200).json({
+                success:true,
+                message:"successfully convert owner to barber",
+                shopOwnerToBarber,
+                isActive:isActive
+            })
+        }else{
+            res.status(404).json({
+                success:false,
+                message:"failed to convert owner as barber"
+            })
+        }
+    } catch (error) {
+        res.status(500).json({
+            success:false,
+            message:"internal server error"
+        })
+        console.error(error)
+    }
+}
+
 
 
 module.exports = {
+    createAsBarber,
     delService,
     viewService,
     fetchServicebyShop,

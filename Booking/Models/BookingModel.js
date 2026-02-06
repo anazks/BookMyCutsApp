@@ -16,6 +16,10 @@ const bookingSchema = new mongoose.Schema({
     ref:'Shop',
     required: true
   },
+  shopOwnerId:{
+    type: mongoose.Schema.Types.ObjectId,
+    ref:"shopOwner"
+  },
 
   serviceIds: [{
     type: mongoose.Schema.Types.ObjectId,

@@ -59,27 +59,39 @@ module.exports.deleteUserFunction = async (userId) => {
     }
 }
 
-module.exports.getAllShopOwners = async (page = 1, limit = 10) => {
+module.exports.getAllShopOwners = async (page, limit) => {
   try {
+    // 🔹 If page & limit are NOT provided → fetch all shop owners
+    if (!page || !limit) {
+      const shopOwners = await ShoperModel.find()
+        .sort({ createdAt: -1 })
+        .lean();
+
+      const totalShopOwners = shopOwners.length;
+
+      return { shopOwners, totalShopOwners };
+    }
+
+    // 🔹 If page & limit ARE provided → paginated fetch
     const skip = (page - 1) * limit;
 
-    // Fetch paginated shop owners and total count in parallel for efficiency
     const [shopOwners, totalShopOwners] = await Promise.all([
       ShoperModel.find()
         .skip(skip)
         .limit(limit)
-        .sort({ createdAt: -1 }) // Optional: sort by newest first
-        .lean(), // Use lean() for better performance if you don't need Mongoose docs
+        .sort({ createdAt: -1 })
+        .lean(),
 
-      ShoperModel.countDocuments(), // Total count for pagination metadata
+      ShoperModel.countDocuments(),
     ]);
 
     return { shopOwners, totalShopOwners };
   } catch (error) {
     console.error("Error fetching shop owners:", error);
-    throw error; // Let the controller handle the error response
+    throw error;
   }
 };
+
 
 module.exports.updatePassword = async (password, email, role) => {
   try {

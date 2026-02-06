@@ -128,39 +128,42 @@ const verifyPayment = async (req, res) => {
 
 
 const getMybooking = async (req, res) => {
-    try {
-        // 1. Get User ID from Token
-        let token = req.headers['authorization']?.split(' ')[1]; 
-        let decodedValue = await Decoder(token);
-        let userId = decodedValue.id; 
-        
-        // 2. Get Pagination Params from Query
-        const limit = parseInt(req.query.limit) || 5;
-        const lastDate = req.query.lastDate; // The "bookmark" from frontend
+  try {
+    // 1. Get User ID from Token
+    let token = req.headers['authorization']?.split(' ')[1]; 
+    let decodedValue = await Decoder(token);
+    let userId = decodedValue.id; 
+    
+    // 2. Get Pagination Params from BODY (since frontend uses POST)
+    const { limit = 10, lastDate } = req.body;   // ← changed from req.query
 
-        // 3. Call Service Function
-        let bookings = await myBooking(userId, limit, lastDate);
+    // Optional: make limit safe
+    const parsedLimit = parseInt(limit, 10);
+    const finalLimit = isNaN(parsedLimit) || parsedLimit < 1 ? 10 : parsedLimit;
 
-        // 4. Calculate the NEXT cursor (the createdAt of the last item we just found)
-        const nextCursor = bookings.length > 0 
-            ? bookings[bookings.length - 1].createdAt 
-            : null;
+    // 3. Call Service Function
+    let bookings = await myBooking(userId, finalLimit, lastDate);
 
-        // 5. Send Response
-        return res.status(200).json({ 
-            success: true, 
-            bookings,     // The list of items
-            nextCursor    // The date for the next call
-        });
+    // 4. Calculate the NEXT cursor
+    const nextCursor = bookings.length > 0 
+      ? bookings[bookings.length - 1].createdAt.toISOString()
+      : null;
 
-    } catch (error) {
-        console.error("Controller Error:", error);
-        return res.status(500).json({ 
-            success: false, 
-            message: error.message || "Internal Server Error" 
-        });
-    }
-}
+    // 5. Send Response
+    return res.status(200).json({ 
+      success: true, 
+      bookings,     
+      nextCursor    
+    });
+
+  } catch (error) {
+    console.error("Controller Error:", error);
+    return res.status(500).json({ 
+      success: false, 
+      message: error.message || "Internal Server Error" 
+    });
+  }
+};
 
 const findDashboardIncome = async (req, res) => {
     try {
@@ -289,7 +292,7 @@ const fetchUpComeingBooking = async (req,res) => {
         const booking = await upcomingBooking(userId)
         if(booking){
             console.log(booking,"upcoming booking found")
-            let shopDetails = await shopModel.findById(booking.shopId)
+            let shopDetails = await ShopModel.findById(booking.shopId)
             console.log(shopDetails,"shop details") 
             res.status(200).json({
                 success:true,

@@ -4,6 +4,7 @@ const {checkBookings,addBookings,updateBooking,isSlotConflicting} = require('../
 const WorkingHours = require('../../Shops/Model/WorkingHours')
 const mongoose = require('mongoose');
 const redisClient = require('../../Config/redis')
+const ShopModel = require('../../Shops/Model/ShopModel')
 
 module.exports.checkAvailable = async (data) => { 
     try {
@@ -15,6 +16,45 @@ module.exports.checkAvailable = async (data) => {
         return false;
     }
 };
+
+const assignShopOwner = async (
+  shopId,
+  bookingDate,
+  startTime,
+  endTime
+) => {
+   console.log(shopId, "SHOPID")
+
+  const shopObjectId = new mongoose.Types.ObjectId(shopId);
+
+
+  // const shop = await ShopModel.findById(shopObjectId).select("ShopOwnerId");
+    const shop = await ShopModel.findById(shopObjectId)
+    console.log("shopData-------------------------",shop)
+    console.log("SHOP OWNER ID",shop.ShopOwnerId)
+
+  if (!shop || !shop.ShopOwnerId) {
+    console.log("the owner is not available")
+    return null; // shop or owner not found
+  }
+
+  const ShopOwnerId = shop.ShopOwnerId;
+
+  // 2️⃣ Check if shop owner has any booking conflict
+  const conflict = await BookingModel.findOne({
+    shopId: shopObjectId,
+    barberId: new mongoose.Types.ObjectId(ShopOwnerId), // owner is the person
+    bookingDate,
+    bookingStatus: { $in: ["pending", "confirmed"] },
+    "timeSlot.startingTime": { $lt: endTime },
+    "timeSlot.endingTime": { $gt: startTime }
+  });
+
+  // 3️⃣ If free → return ownerId, else null
+  return conflict ? null : ShopOwnerId;
+};
+
+
 
 
 const assignBarber = async (startTime, endTime, bookingDate, shopId) => {
@@ -57,6 +97,7 @@ const assignBarber = async (startTime, endTime, bookingDate, shopId) => {
   // 6️⃣ Assign barber (simple strategy)
   return freeBarbers[0]; // later you can change strategy
 };
+
 
 
 
@@ -114,7 +155,7 @@ module.exports.bookNow = async (data, decodedValue) => {
     if (hasConflict) {
       throw new Error("This time slot is already booked by someone else.");
     }
-
+    let shopOwner = null;  
     // Step 2: Assign barber if not selected
     if (!data.barberId) {
       const barber = await assignBarber(
@@ -124,12 +165,26 @@ module.exports.bookNow = async (data, decodedValue) => {
         data.shopId
       );
 
-      if (!barber) {
-        throw new Error("No available barber found for this time.");
-      }
+      console.log("assignBarber result:",barber)
 
-      data.barberId = barber._id;
-      console.log("Auto-assigned barber ID:", data.barberId);
+     
+    if (!barber) {
+  const shopOwner = await assignShopOwner(
+    data.shopId,
+    data.bookingDate,
+    startTime,
+    endTime
+  );
+
+  console.log("SHOP OWNER RESULT:", shopOwner);
+   shopOwner
+
+  if (!shopOwner) {
+    throw new Error("No available barber found for this time.");
+  }
+
+}
+
     }
 
     // Step 3: Prepare booking data
@@ -137,7 +192,7 @@ module.exports.bookNow = async (data, decodedValue) => {
       barberId: new mongoose.Types.ObjectId(data.barberId),
       userId: new mongoose.Types.ObjectId(data.userId),
       shopId: new mongoose.Types.ObjectId(data.shopId),
-
+      shopOwnerId: shopOwner || null,
       serviceIds: data.serviceIds?.map(id => new mongoose.Types.ObjectId(id)) || [],
       services: data.services?.map(service => ({
         id: new mongoose.Types.ObjectId(service.id),

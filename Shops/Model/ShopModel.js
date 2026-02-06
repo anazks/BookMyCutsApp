@@ -72,6 +72,9 @@ const ShopSchema = new mongoose.Schema(
     },
     PremiumEndDate: {
       type: Date
+    },
+    isActive:{
+      type: Boolean
     }
   },
   { timestamps: true }

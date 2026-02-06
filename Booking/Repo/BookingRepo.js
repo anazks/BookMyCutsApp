@@ -11,7 +11,8 @@ module.exports.checkBookings = async(data)=>{
 }
 module.exports.addBookings = async(data)=>{
     try {
-        let bookings = BookingModel.create(data)
+        let bookings = await BookingModel.create(data)
+            console.log("BOOKING DOCUMENT:",bookings)
             return bookings
     } catch (error) {
         console.log(error)
@@ -42,26 +43,60 @@ module.exports. isSlotConflicting = async (
 };
 
 
-module.exports.myBooking = async (userId,  limit) => {
+module.exports.myBooking = async (userId, limit = 10, lastDate = null) => {
   try {
-    // Ensure safe numbers
-    const bookings = await BookingModel.find({ userId })
-      .populate("shopId", "ShopName")
+     
+      const allBookings = await BookingModel.find({});
+      
+    const query = { userId };
+    if (lastDate) query.createdAt = { $lt: new Date(lastDate) };
+
+    // Fetch bookings and populate barberId if it's a real barber
+    const bookings = await BookingModel.find(query)
       .populate("barberId", "BarberName")
-      // .populate("serviceId", "ServiceName")
-      .sort({ createdAt: -1 })     // newest first – change field if needed
+      .populate("shopId", "ShopName") // will be null if shop owner
+      .sort({ createdAt: -1 })
       .limit(limit)
-      .lean()                      // optional: faster if you don't modify docs
+      .lean()
       .exec();
 
-    return bookings;               // ← only the array, same shape as your original
+    // Map bookings and determine performedBy
+    const result = await Promise.all(
+      bookings.map(async (booking) => {
+        let performedBy = "Shop Owner";
 
+        if (booking.barberId) {
+          // 1️⃣ If barberId is a real barber (BarberName exists)
+          if (booking.barberId.BarberName) {
+            performedBy = booking.barberId.BarberName;
+          } 
+          // 2️⃣ If barberId is a shop owner (not in Barabar)
+          else {
+            const owner = await ShopOwnerModel.findById(booking.barberId)
+              .select("firstName lastName")
+              .lean();
+
+            if (owner) {
+              performedBy = `${owner.firstName} ${owner.lastName}`.trim();
+            } else {
+              performedBy = "Shop Owner";
+            }
+          }
+        }
+
+        return {
+          ...booking,
+          performedBy,
+        };
+      })
+    );
+
+    return result;
   } catch (error) {
     console.error("Error fetching bookings:", error);
     throw error;
   }
 };
-
 
 
 module.exports.findDashboardIncomeFunction = async (shopId) => {
