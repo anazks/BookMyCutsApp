@@ -181,6 +181,17 @@ module.exports.modifyShopOwner = async (userId, updatedData) => {
   }
 };
 
+module.exports.isUserIsNew = async (userData) => {
+  try {
+     const user = await UserModel.findOne({email: userData.email})
+     if(!user){
+       const newUser = await UserModel.create(userData)
+     }
+     return user
+  } catch (error) {
+    console.log(error)
+  }
+}
 
 
 

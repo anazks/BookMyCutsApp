@@ -9,6 +9,7 @@ const { findShoper } = require('../../Auth/Repos/userRepo');
 const PayoutRoutes = require('../Router/PayoutRoutes')
 const {upsertPayoutAccount} = require('../Controller/PayoutController');
 const { getAllBookingsOfShop } = require('../Repo/ShopRepo');
+const adminRoutes = require('../Router/AdminRoutes')
 
 
 router.route('/addShop').post(AddShop)
@@ -76,6 +77,7 @@ router.route('/shop-owner/create-as-barber/:shopId').post(createAsBarber)
 
 router.use('/payout',PayoutRoutes)
 router.use('/workingHours',WorkingHoursRoutes)
+router.use('/admin',adminRoutes)
 
 
 

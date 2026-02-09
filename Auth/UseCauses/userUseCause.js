@@ -1,4 +1,4 @@
-const { createUser,findUserByEmail ,createShoper,findShoper, saveOtp } = require("../Repos/userRepo");
+const { createUser,findUserByEmail ,createShoper,findShoper, saveOtp,isUserIsNew } = require("../Repos/userRepo");
 const bcrypt = require('bcryptjs')
 const jwt = require('jsonwebtoken');
 const nodemailer = require('nodemailer');
@@ -7,6 +7,7 @@ const twilio = require("twilio");
 const otpModel = require('../Model/OtpModel');
 const ShoperModel = require("../Model/ShoperModel");
 const UserModel = require("../Model/UserModel")
+const { OAuth2Client } = require('google-auth-library');
 
 const secretKey =  process.env.secretKey;
 
@@ -279,3 +280,40 @@ module.exports.verifyOtpFunction = async (otp, mobileNo,role) => {
     return { success: false, message: "Server error" };
   }
 };
+
+const CLIENT_ID = '805182446508-gvphqj7e7kigpreinncsi480u4dficea.apps.googleusercontent.com'; // ← Your WEB client ID
+const client = new OAuth2Client(CLIENT_ID);   // ← this line was missing
+
+
+module.exports.verifyGoogleIdToken = async (idToken) => {
+  try {
+    console.log("idToken >>>>>>>>>>>>>>>>>>>",idToken)
+    const ticket = await client.verifyIdToken({
+      idToken: idToken,
+      audience: CLIENT_ID,  // Must match the WEB client ID used in your app
+      // If you have multiple client IDs (web + android + ios), use an array:
+      // audience: [CLIENT_ID_WEB, CLIENT_ID_ANDROID, ...]
+    });
+
+    const payload = ticket.getPayload();
+
+    const userData = {
+       email: payload.email,
+       firstName: payload.name,
+       lastName: payload.familyName
+    }
+    
+    const user =  await  isUserIsNew(userData)
+    const token = jwt.sign({ id: user._id }, secretKey, { expiresIn: '1h' }); 
+
+
+
+    // These are the most useful fields
+    return {
+     user,
+     token
+    }
+  } catch (error) {
+    console.log(error)
+  }
+}

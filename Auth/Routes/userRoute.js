@@ -1,5 +1,5 @@
 const express = require('express');
-const { userRegistration,userLogin,ShopRegister,login,getUsers,getProfile,otpRequest,verifyOtp,deleteUser,viewAllShopOwners,forgotPassword,verifyForgotPasswordOtp,resetPassword,fetchUser,removeShopOwner,updateShopOwner} = require('../Controllers/AuthController');
+const { userRegistration,userLogin,ShopRegister,login,getUsers,getProfile,otpRequest,verifyOtp,deleteUser,viewAllShopOwners,forgotPassword,verifyForgotPasswordOtp,resetPassword,fetchUser,removeShopOwner,updateShopOwner,userGoogleSignin} = require('../Controllers/AuthController');
 const { verifyToken } = require('../../Middlewares/AuthMiddleWares/AuthMiddleWare');
 const router = express.Router(); 
 
@@ -33,6 +33,8 @@ router.route('/viewAllShopOwners').get(viewAllShopOwners)
 router.route('/shop-owner/:id').get(fetchUser)
 router.route('/shop-owner/:id').delete(removeShopOwner)
 router.route('/shop-owner/:id').put(updateShopOwner)
+
+router.route('/user/google-sigin').post(userGoogleSignin)
 
 
 // router.route('/userLogin').post(userLogin)

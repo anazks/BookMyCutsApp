@@ -1,5 +1,5 @@
 const asyncHandler = require("express-async-handler");
-const { registerUserUseCase,loginuserUsecause,registerShoperUseCase,loginShoperUsecause,sendOtpmobileNo,verifyOtpFunction } = require("../UseCauses/userUseCause");
+const { registerUserUseCase,loginuserUsecause,registerShoperUseCase,loginShoperUsecause,sendOtpmobileNo,verifyOtpFunction,verifyGoogleIdToken } = require("../UseCauses/userUseCause");
 const decorder = require("../../TokenDecoder/Decoder");
 const {getUserProfile,deleteUserFunction,getAllShopOwners, updatePassword,fetchUsers,findUserById,modifyShopOwner,deleteShopOwner} = require("../Repos/userRepo")
 const bcrypt = require('bcryptjs')
@@ -598,5 +598,37 @@ const updateShopOwner = async (req,res) => {
   }
 }
 
+const userGoogleSignin = async (req,res) => { 
+  try {
+    const idToken = req.body.idToken
+    const verified = await verifyGoogleIdToken(idToken)
+    console.log(verified,"verified ")
+    const user = {
+      id:verified.user._id,
+      firstName:verified.user.firstName,
+      mobileNo:verified.user.mobileNo,
+      city:verified.user.city
+    }
+    console.log("user .................",user)
+    if(verified){
+      res.status(200).json({
+        success:true,
+        message:"login successfully",
+        user
+      })
+    }else{
+      res.status(404).json({
+        success:false,
+        message:"login failed",
+      })
+    }
+  } catch (error) {
+    console.log(error)
+    res.status(500).json({
+      success:false,
+      message:"interval server error"
+    })
+  }
+}
 
-module.exports = {updateShopOwner,removeShopOwner,resetPassword,verifyForgotPasswordOtp,forgotPassword,viewAllShopOwners,deleteUser,userRegistration,userLogin,ShopRegister,login,getUsers,getProfile,otpRequest,verifyOtp,fetchUser}
+module.exports = {userGoogleSignin,updateShopOwner,removeShopOwner,resetPassword,verifyForgotPasswordOtp,forgotPassword,viewAllShopOwners,deleteUser,userRegistration,userLogin,ShopRegister,login,getUsers,getProfile,otpRequest,verifyOtp,fetchUser}
