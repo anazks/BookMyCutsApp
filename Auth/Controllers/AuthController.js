@@ -603,6 +603,8 @@ const userGoogleSignin = async (req,res) => {
     const idToken = req.body.idToken
     const verified = await verifyGoogleIdToken(idToken)
     console.log(verified,"verified ")
+    const token = verified.token
+    console.log(token,"token >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
     const user = {
       id:verified.user._id,
       firstName:verified.user.firstName,
@@ -614,6 +616,7 @@ const userGoogleSignin = async (req,res) => {
       res.status(200).json({
         success:true,
         message:"login successfully",
+        token,
         user
       })
     }else{
