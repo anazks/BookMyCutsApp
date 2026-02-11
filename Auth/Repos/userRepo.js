@@ -5,6 +5,7 @@ const { userLogin } = require("../Controllers/AuthController");
 const otpModel = require("../Model/OtpModel");
 const ShoperModel = require("../Model/ShoperModel");
 const ShopModel = require("../../Shops/Model/ShopModel");
+const AdminModel = require("../Model/AdminModel")
 
 module.exports.createUser = asyncHandler(async (data)=>{
     try {
@@ -192,6 +193,12 @@ module.exports.isUserIsNew = async (userData) => {
     console.log(error)
   }
 }
+
+module.exports.findAdminByUserName = asyncHandler(async(data) => {
+    let {userName} = data;
+    console.log(userName, "userName in rep####");
+    return await AdminModel.findOne({userName: userName});
+});
 
 
 

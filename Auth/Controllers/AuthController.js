@@ -1,12 +1,15 @@
 const asyncHandler = require("express-async-handler");
-const { registerUserUseCase,loginuserUsecause,registerShoperUseCase,loginShoperUsecause,sendOtpmobileNo,verifyOtpFunction,verifyGoogleIdToken } = require("../UseCauses/userUseCause");
+const { registerUserUseCase,loginuserUsecause,registerShoperUseCase,loginShoperUsecause,sendOtpmobileNo,verifyOtpFunction,verifyGoogleIdToken,adminLoginUsecause } = require("../UseCauses/userUseCause");
 const decorder = require("../../TokenDecoder/Decoder");
 const {getUserProfile,deleteUserFunction,getAllShopOwners, updatePassword,fetchUsers,findUserById,modifyShopOwner,deleteShopOwner} = require("../Repos/userRepo")
-const bcrypt = require('bcryptjs')
+constm = require('bcryptjs')
 const jwt = require('jsonwebtoken');
 const otpModel = require('../Model/OtpModel')
 const crypto = require('crypto');
 const nodemailer = require('nodemailer');
+const bcrypt = require('bcryptjs')
+const AdminModel = require('../Model/AdminModel')
+
 
 
 const userRegistration = asyncHandler(async (req,res)=>{
@@ -97,6 +100,7 @@ const ShoperModel = require("../Model/ShoperModel");
 const Decoder = require("../../TokenDecoder/Decoder");
 const { error } = require("console");
 const { LookupRequestWithCorId } = require("twilio/lib/rest/lookups/v2/query");
+const { AdminModal } = require("adminjs");
 
 
 const getUsers = async (req,res) => {
@@ -634,4 +638,66 @@ const userGoogleSignin = async (req,res) => {
   }
 }
 
-module.exports = {userGoogleSignin,updateShopOwner,removeShopOwner,resetPassword,verifyForgotPasswordOtp,forgotPassword,viewAllShopOwners,deleteUser,userRegistration,userLogin,ShopRegister,login,getUsers,getProfile,otpRequest,verifyOtp,fetchUser}
+const AdminRegistration = async (req,res) => {
+  try {
+    const data = req.body
+    const password =  data.password
+    const saltRounds = 10;
+    const hashedPassword = await bcrypt.hash(password, saltRounds);
+    data.password = hashedPassword;  // assign properly
+    const admin = await AdminModel.create(data);
+    res.status(200).json({
+      success:true,
+      message:"successfull registered as admin",
+      admin
+    })
+  } catch (error) {
+    console.log(error)
+    res.status(500).json({
+      success:false,
+      message:"internal server error"
+    })
+  }
+}
+
+const adminLogin = asyncHandler(async (req, res) => {
+    try {
+        const result = await adminLoginUsecause(req.body);
+
+        if (result) {
+            return res.status(200).json({
+                success:                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        true,
+                message: result.message || "Login successful",
+                token: result.token,
+                user: result.user
+            });
+        }if (result === 0) {
+          res.json({
+            success:false,
+            message:"authentication failed"
+            
+          })
+        } else {
+          
+        }{
+            res.status(401).json({
+            success: false,
+            message: result.message || "Authentication failed"
+        });
+        }
+
+       
+
+    } catch (error) {
+        console.error("userLogin controller error:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Internal server error",
+            // error: error.message   // ← uncomment only during development
+        });
+    }
+});
+
+
+
+module.exports = {adminLogin,AdminRegistration,userGoogleSignin,updateShopOwner,removeShopOwner,resetPassword,verifyForgotPasswordOtp,forgotPassword,viewAllShopOwners,deleteUser,userRegistration,userLogin,ShopRegister,login,getUsers,getProfile,otpRequest,verifyOtp,fetchUser}

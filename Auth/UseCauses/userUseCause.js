@@ -1,4 +1,4 @@
-const { createUser,findUserByEmail ,createShoper,findShoper, saveOtp,isUserIsNew } = require("../Repos/userRepo");
+const { createUser,findUserByEmail ,createShoper,findShoper, saveOtp,isUserIsNew,findAdminByUserName } = require("../Repos/userRepo");
 const bcrypt = require('bcryptjs')
 const jwt = require('jsonwebtoken');
 const nodemailer = require('nodemailer');
@@ -354,5 +354,84 @@ module.exports.verifyGoogleIdToken = async (data) => {
     console.error('Google Auth Error:', error);
     throw error; // let controller handle response
   }
+};
+
+
+module.exports.adminLoginUsecause = async (data) => {
+    try {
+        const { userName, password } = data;
+
+        if (!userName || !password) {
+            return {
+                success: false,
+                message: "Email and password are required"
+            };
+        }
+
+        console.log(`Login attempt for userName: ${userName}`);
+
+        const admin = await findAdminByUserName({ userName });
+        if (!admin) {
+            return {
+                success: false,
+                message: "admin not found"
+            };
+        }
+
+        // Safety check: prevent bcrypt crash if password field is missing/corrupted
+        if (!admin.password || typeof admin.password !== 'string' || !admin.password.startsWith('$2')) {
+            console.error(`Invalid or missing password hash for user: ${admin}`);
+            return {
+                success: false,
+                message: "Invalid account credentials"
+            };
+        }
+
+        let isMatch;
+        try {
+            isMatch = await bcrypt.compare(password, admin.password);
+        } catch (bcryptErr) {
+            console.error("bcrypt.compare failed:", bcryptErr.message);
+            return {
+                success: false,
+                message: "Authentication error – please try again"
+            };
+        }
+
+        if (!isMatch) {
+            return {
+                success: false,
+                message: "Invalid password"
+            };
+        }
+
+        // ── Successful login ────────────────────────────────────────────────
+        const token = jwt.sign(
+            { id: admin._id.toString() },
+            secretKey,
+            { expiresIn: '1h' }
+        );
+
+        const userData = {
+            id: admin._id.toString(),
+            userName: admin.userName || '',
+            password: admin.password || '',
+            // Add any other safe fields you want to return
+        };
+
+        return {
+            success: true,
+            message: "Login successful",
+            token,
+            admin: userData
+        };
+
+    } catch (error) {
+        console.error("loginuserUsecause error:", error);
+        return {
+            success: false,
+            message: "Server error during login"
+        };
+    }
 };
 
