@@ -14,7 +14,6 @@ const ShopOwner = new Schema({
     },
     mobileNo:{
         type : String,
-        required : true,
         maxlenght : 100
     },
     email:{
@@ -24,11 +23,9 @@ const ShopOwner = new Schema({
     },
     city:{
         type : String,
-        required : true
     },
     password:{
         type : String,
-        required : true
     },
     role:{
         type:String,

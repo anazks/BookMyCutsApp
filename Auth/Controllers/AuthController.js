@@ -600,16 +600,16 @@ const updateShopOwner = async (req,res) => {
 
 const userGoogleSignin = async (req,res) => { 
   try {
-    const idToken = req.body.idToken
-    const verified = await verifyGoogleIdToken(idToken)
+    const data = req.body
+    const verified = await verifyGoogleIdToken(data)
     console.log(verified,"verified ")
     const token = verified.token
     console.log(token,"token >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
     const user = {
-      id:verified.user._id,
-      firstName:verified.user.firstName,
-      mobileNo:verified.user.mobileNo,
-      city:verified.user.city
+      id:verified.data._id,
+      firstName:verified.data.firstName,
+      lastName:verified.data.lastName,
+      email:verified.data.email
     }
     console.log("user .................",user)
     if(verified){

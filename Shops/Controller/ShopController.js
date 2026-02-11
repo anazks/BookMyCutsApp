@@ -301,17 +301,51 @@ const addBarber = asyncHandler(async (req, res) => {
 
 const ViewAllBarbers = asyncHandler(async (req, res) => {
     try {
-        const allBarbers = await viewAllBarbers();
-        if (!allBarbers || allBarbers.length === 0) {
+        // Get pagination parameters from query string
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 10;
+        const skip = (page - 1) * limit;
+        
+        // Get optional search parameters
+        const search = req.query.search || '';
+        const location = req.query.location || '';
+        const specialty = req.query.specialty || '';
+        const sortBy = req.query.sortBy || 'createdAt';
+        const sortOrder = req.query.sortOrder === 'asc' ? 1 : -1;
+
+        // Call the service function with pagination parameters
+        const result = await viewAllBarbers({
+            page,
+            limit,
+            skip,
+            search,
+            location,
+            specialty,
+            sortBy,
+            sortOrder
+        });
+
+        if (!result.barbers || result.barbers.length === 0) {
             return res.status(404).json({
                 success: false,
                 message: "No barbers found"
             });
         }
+
         return res.status(200).json({
             success: true,
-            message: "All barbers retrieved successfully",
-            data: allBarbers
+            message: "Barbers retrieved successfully",
+            data: {
+                barbers: result.barbers,
+                pagination: {
+                    currentPage: page,
+                    totalPages: result.totalPages,
+                    totalBarbers: result.totalBarbers,
+                    hasNextPage: page < result.totalPages,
+                    hasPreviousPage: page > 1,
+                    limit: limit
+                }
+            }
         });
     } catch (error) {
         console.error("Error fetching barbers:", error);
@@ -870,32 +904,61 @@ const editService = async (req,res) => {
    }
  }
 
- const findNearByShops = async (req,res) => {
+const findNearByShops = async (req, res) => {
     try {
-        const {lng,lat} = req.query
-        console.log("COORDINATES")
-        console.log(lng,"lng")
-        console.log(lat,"lat")
-        const shops = await findNearestShops(lng,lat)
-        if(shops.length > 0){
-          return  res.status(200).json({
-                success:true,
-                message:"successfully fetch nearby shops",
-                shops
-            })
+        const { lng, lat, page = 1, limit = 10 } = req.query;
+
+        // Validate coordinates
+        if (!lng || !lat) {
+            return res.status(400).json({
+                success: false,
+                message: "lng and lat are required"
+            });
         }
-         return  res.status(404).json({
-            success:false,
-            message:"failed to fetch nearby shops"
-        })
+
+        console.log("COORDINATES:", lng, lat);
+
+        const pageNum = parseInt(page);
+        const limitNum = parseInt(limit);
+
+        if (isNaN(pageNum) || isNaN(limitNum) || pageNum < 1 || limitNum < 1) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid page or limit"
+            });
+        }
+
+        const shops = await findNearestShops(lng, lat, {
+            page: pageNum,
+            limit: limitNum
+        });
+
+        if (shops.length > 0) {
+            return res.status(200).json({
+                success: true,
+                message: "Successfully fetched nearby shops",
+                shops,
+                // Optional: add metadata
+                pagination: {
+                    page: pageNum,
+                    limit: limitNum,
+                    returned: shops.length
+                }
+            });
+        }
+
+        return res.status(404).json({
+            success: false,
+            message: "No nearby shops found"
+        });
     } catch (error) {
-        console.error("Error in findNearByShops",error)
+        console.error("Error in findNearByShops:", error);
         return res.status(500).json({
-            success:false,
-            message:"internal server error"
-        })
+            success: false,
+            message: "Internal server error"
+        });
     }
-}
+};
 
 const deleteShop = async (req,res) => {
     try {

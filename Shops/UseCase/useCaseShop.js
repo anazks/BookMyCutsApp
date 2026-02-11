@@ -35,26 +35,36 @@ module.exports.convertToGeocode = async (data) => {
   }
 };
 
-module.exports.findNearestShops = async (lng, lat) => {
-    try {
-        let radius = 2000; // start 2 km
-        let shops = [];
-        let minResults = 5;
-        let maxRadius = 20000;
+module.exports.findNearestShops = async (lng, lat, options = {}) => {
+    const { page = 1, limit = 10 } = options;
 
+    try {
+        let radius = 2000;        // start 2 km
+        let shops = [];
+        let minResults = 5;       // minimum shops before we stop expanding
+        let maxRadius = 20000;    // 20 km max
+
+        // Phase 1: Collect enough shops by expanding radius
         while (shops.length < minResults && radius <= maxRadius) {
-            shops = await findNearbyShopsFunction(lng, lat, radius); // ✅ Added await and correct order
-            
-            console.log(`Searched within ${radius}m, found ${shops.length} shops`); // Debug log
+            const batch = await findNearbyShopsFunction(lng, lat, radius);
+
+            console.log(`Searched within ${radius}m, found ${batch.length} shops`);
+
+            // Add new shops (you might want to deduplicate in real app)
+            shops = [...shops, ...batch];
 
             if (shops.length < minResults) {
-                radius += 2000; // expand by 2 km
+                radius += 2000;
             }
         }
-        
-        return shops;
+
+        // Phase 2: Apply pagination on the collected results
+        const skip = (page - 1) * limit;
+        const paginatedShops = shops.slice(skip, skip + limit);
+
+        return paginatedShops;
     } catch (error) {
         console.error("Error in findNearestShops:", error);
         throw error;
     }
-}
+};

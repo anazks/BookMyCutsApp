@@ -63,11 +63,63 @@ module.exports.addBarbers = async (data) => {
         console.log(error);   
     }
 }
-module.exports.viewAllBarbers = async () => {
+module.exports.viewAllBarbers = async (params = {}) => {
     try {
-        return await BarberModel.find();
+        const {
+            page = 1,
+            limit = 10,
+            skip = 0,
+            search = '',
+            location = '',
+            specialty = '',
+            sortBy = 'createdAt',
+            sortOrder = -1
+        } = params;
+
+        // Build search query
+        const query = {};
+        
+        if (search) {
+            query.$or = [
+                { name: { $regex: search, $options: 'i' } },
+                { email: { $regex: search, $options: 'i' } },
+                { 'contact.phone': { $regex: search, $options: 'i' } }
+            ];
+        }
+        
+        if (location) {
+            query.location = { $regex: location, $options: 'i' };
+        }
+        
+        if (specialty) {
+            query.specialties = { $in: [specialty] };
+        }
+
+        // Build sort object
+        const sort = {};
+        sort[sortBy] = sortOrder;
+
+        // Get total count for pagination
+        const totalBarbers = await BarberModel.countDocuments(query);
+        const totalPages = Math.ceil(totalBarbers / limit);
+
+        // Get paginated results
+        const barbers = await BarberModel.find(query)
+            .sort(sort)
+            .skip(skip)
+            .limit(limit)
+            .select('-password') // Exclude sensitive data if needed
+            .lean(); // Convert to plain JavaScript objects
+
+        return {
+            barbers,
+            totalBarbers,
+            totalPages,
+            currentPage: page
+        };
     } catch (error) {
-        console.log(error);
+        console.error("Error in viewAllBarbers service:", error);
+        throw error;
     }
 }
 module.exports.getAShop = async(shopOwnerId)=>{

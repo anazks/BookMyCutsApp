@@ -285,35 +285,74 @@ const CLIENT_ID = '805182446508-gvphqj7e7kigpreinncsi480u4dficea.apps.googleuser
 const client = new OAuth2Client(CLIENT_ID);   // ← this line was missing
 
 
-module.exports.verifyGoogleIdToken = async (idToken) => {
+module.exports.verifyGoogleIdToken = async (data) => {
   try {
-    console.log("idToken >>>>>>>>>>>>>>>>>>>",idToken)
+    const idToken = data.idToken;
+    const role = data.role || 'user'; // ✅ backward compatible
+
+    if (!idToken) {
+      throw new Error('idToken is required');
+    }
+
+    // 1️⃣ Verify Google token
     const ticket = await client.verifyIdToken({
-      idToken: idToken,
-      audience: CLIENT_ID,  // Must match the WEB client ID used in your app
-      // If you have multiple client IDs (web + android + ios), use an array:
-      // audience: [CLIENT_ID_WEB, CLIENT_ID_ANDROID, ...]
+      idToken,
+      audience: process.env.GOOGLE_CLIENT_ID,
     });
 
     const payload = ticket.getPayload();
 
+    // 2️⃣ Common user data
     const userData = {
-       email: payload.email,
-       firstName: payload.name,
-       lastName: payload.familyName
+      email: payload.email,
+      firstName: payload.given_name,
+      lastName: payload.family_name,
+      googleId: payload.sub,
+      authProvider: 'google',
+    };
+
+    let account;
+
+    // 3️⃣ Role-based DB handling
+    if (role === 'user') {
+      account = await UserModel.findOne({ email: userData.email });
+
+      if (!account) {
+        account = await UserModel.create(userData);
+      }
+    } 
+    else if (role === 'shop') {
+      account = await ShopOwnerModel.findOne({ email: userData.email });
+
+      if (!account) {
+        account = await ShopOwnerModel.create({
+          ...userData,
+          isProfileCompleted: false
+        });
+      }
+    } 
+    else {
+      throw new Error('Invalid role');
     }
-    
-    const user =  await  isUserIsNew(userData)
-    const token = jwt.sign({ id: user._id }, secretKey, { expiresIn: '1h' }); 
 
+    // 4️⃣ Generate JWT
+    const token = jwt.sign(
+      { id: account._id, role },
+      secretKey,
+      { expiresIn: '1h' }
+    );
 
-
-    // These are the most useful fields
+    // 5️⃣ Unified return
     return {
-     user,
-     token
-    }
+      success: true,
+      role,
+      token,
+      data: account
+    };
+
   } catch (error) {
-    console.log(error)
+    console.error('Google Auth Error:', error);
+    throw error; // let controller handle response
   }
-}
+};
+

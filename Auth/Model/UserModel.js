@@ -14,7 +14,6 @@ const UserSchema = new Schema({
     },
     mobileNo:{
         type : String,
-        required : true,
         maxlenght : 100
     },
     city:{

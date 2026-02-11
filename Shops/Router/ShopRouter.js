@@ -10,6 +10,8 @@ const PayoutRoutes = require('../Router/PayoutRoutes')
 const {upsertPayoutAccount} = require('../Controller/PayoutController');
 const { getAllBookingsOfShop } = require('../Repo/ShopRepo');
 const adminRoutes = require('../Router/AdminRoutes')
+const ShopModel = require('../Model/ShopModel')
+const Barabar = require('../Model/BarbarModel')
 
 
 router.route('/addShop').post(AddShop)
@@ -71,6 +73,9 @@ router.route('/service/:serviceId').delete(delService)
 router.route('/accounts').post(upsertPayoutAccount)
 
 router.route('/shop-owner/create-as-barber/:shopId').post(createAsBarber)
+
+
+
 
 
  
