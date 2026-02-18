@@ -12,7 +12,7 @@ const { getAllBookingsOfShop } = require('../Repo/ShopRepo');
 const adminRoutes = require('../Router/AdminRoutes')
 const ShopModel = require('../Model/ShopModel')
 const Barabar = require('../Model/BarbarModel')
-
+const City = require('../../Auth/Model/City')
 
 router.route('/addShop').post(AddShop)
 router.route('/getMyProfile').get(myprofile)
@@ -75,7 +75,33 @@ router.route('/accounts').post(upsertPayoutAccount)
 router.route('/shop-owner/create-as-barber/:shopId').post(createAsBarber)
 
 
+router.get('/cities', async (req, res) => {
+  try {
+const cities = await City.aggregate([
+  {
+    $project: {
+      name: 1,
+      lat: { $arrayElemAt: ["$location.coordinates", 1] },
+      lon: { $arrayElemAt: ["$location.coordinates", 0] },
+      _id: 0   // optional: remove _id if not needed
+    }
+  },
+  { $sort: { name: 1 } }
+]);     // sort alphabetically by name
 
+    res.status(200).json({
+      success: true,
+      count: cities.length,
+      data: cities
+    });
+  } catch (error) {
+    console.error('Error fetching cities:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while fetching cities'
+    });
+  }
+});
 
 
  
@@ -83,6 +109,7 @@ router.route('/shop-owner/create-as-barber/:shopId').post(createAsBarber)
 router.use('/payout',PayoutRoutes)
 router.use('/workingHours',WorkingHoursRoutes)
 router.use('/admin',adminRoutes)
+
 
 
 

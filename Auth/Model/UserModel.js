@@ -29,7 +29,19 @@ const UserSchema = new Schema({
     role:{
         type:String,
         default:'user'
-    }
+    },
+    referralCode:{
+        type:String
+    },
+    referredBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+        default: null
+    },
+    referralDiscount: {
+        type: Boolean,
+        default: false
+    },
 })
 
 module.exports = mongoose.model('User',UserSchema);

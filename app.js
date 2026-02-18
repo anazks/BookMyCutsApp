@@ -17,6 +17,7 @@ const SlotRouter = require('./SlotManagement/SlotRouter/SlotRouter')
 const BookingRouter = require('./Booking/Router/BookingRouter')
 const setupSwagger = require('./swaggerDocs/swaggerConfig');
 const checkExpiredPremium = require('./Shops/ShopScheduler/Scheduler');
+const { seedKeralaCities } = require('./Auth/Controllers/seedCities');
 require('./Cloudinary/CloudinaryConfig')
 
 // Define a route for the root URL
@@ -73,6 +74,8 @@ app.get('/test-redis', async (req, res) => {
 });
 
 console.log("Cron job scheduled successfully - will run every 10 minutes");
+
+
 
 // Start the server
 app.listen(port, () => {

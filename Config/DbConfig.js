@@ -19,7 +19,6 @@ async function connectToDatabase() {
     try {
       // Connect to the database without deprecated options
       await mongoose.connect(DB_URI);
-
       console.log('Connected DB name:', mongoose.connection.name);
       retryCount = 0; // Reset retry count on successful connection
     } catch (error) {

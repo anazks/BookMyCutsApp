@@ -1,7 +1,7 @@
 const asyncHandler = require("express-async-handler");
 const { registerUserUseCase,loginuserUsecause,registerShoperUseCase,loginShoperUsecause,sendOtpmobileNo,verifyOtpFunction,verifyGoogleIdToken,adminLoginUsecause } = require("../UseCauses/userUseCause");
 const decorder = require("../../TokenDecoder/Decoder");
-const {getUserProfile,deleteUserFunction,getAllShopOwners, updatePassword,fetchUsers,findUserById,modifyShopOwner,deleteShopOwner} = require("../Repos/userRepo")
+const {getUserProfile,deleteUserFunction,getAllShopOwners, updatePassword,fetchUsers,findUserById,modifyShopOwner,deleteShopOwner,getNearestCities} = require("../Repos/userRepo")
 constm = require('bcryptjs')
 const jwt = require('jsonwebtoken');
 const otpModel = require('../Model/OtpModel')
@@ -100,7 +100,6 @@ const ShoperModel = require("../Model/ShoperModel");
 const Decoder = require("../../TokenDecoder/Decoder");
 const { error } = require("console");
 const { LookupRequestWithCorId } = require("twilio/lib/rest/lookups/v2/query");
-const { AdminModal } = require("adminjs");
 
 
 const getUsers = async (req,res) => {
@@ -699,5 +698,30 @@ const adminLogin = asyncHandler(async (req, res) => {
 });
 
 
+async function getNearbyCitiesController(req, res) {
+  try {
+    const { lat, lon } = req.query; // or req.body, or from auth/jwt location
 
-module.exports = {adminLogin,AdminRegistration,userGoogleSignin,updateShopOwner,removeShopOwner,resetPassword,verifyForgotPasswordOtp,forgotPassword,viewAllShopOwners,deleteUser,userRegistration,userLogin,ShopRegister,login,getUsers,getProfile,otpRequest,verifyOtp,fetchUser}
+    if (!lat || !lon) {
+      return res.status(400).json({ success: false, message: 'lat and lon are required' });
+    }
+
+    const userLat = parseFloat(lat);
+    const userLon = parseFloat(lon);
+
+    const nearbyCities = await getNearestCities(userLat, userLon, 8);
+
+    res.json({
+      success: true,
+      count: nearbyCities.length,
+      userLocation: { lat: userLat, lon: userLon },
+      data: nearbyCities
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Server error', error: error.message });
+  }
+}
+
+
+
+module.exports = {getNearbyCitiesController,adminLogin,AdminRegistration,userGoogleSignin,updateShopOwner,removeShopOwner,resetPassword,verifyForgotPasswordOtp,forgotPassword,viewAllShopOwners,deleteUser,userRegistration,userLogin,ShopRegister,login,getUsers,getProfile,otpRequest,verifyOtp,fetchUser}

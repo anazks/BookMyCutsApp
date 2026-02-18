@@ -8,20 +8,61 @@ const otpModel = require('../Model/OtpModel');
 const ShoperModel = require("../Model/ShoperModel");
 const UserModel = require("../Model/UserModel")
 const { OAuth2Client } = require('google-auth-library');
+const crypto = require("crypto");
+
 
 const secretKey =  process.env.secretKey;
 
 
 
-module.exports.registerUserUseCase = async (data)=>{
-    let {password} = data ;
-    const saltRounds = 10;
-    const hashedPassword = await bcrypt.hash(password, saltRounds);
-    data.password = hashedPassword;
-    const user = await createUser(data);
-    console.log(user,"user in usecase")
-    return user;
-}
+const generateReferralCode = async () => {
+  let code;
+  let isUnique = false;
+
+  while (!isUnique) {
+    code = crypto.randomBytes(3).toString("hex").toUpperCase();
+    const existingUser = await UserModel.findOne({ referralCode: code });
+    if (!existingUser) isUnique = true;
+  }
+
+  return code;
+};
+
+
+const findReferrerByCode = async (referralCode) => {
+  if (!referralCode) return null;
+
+  const referrer = await UserModel.findOne({
+    referralCode: referralCode.trim().toUpperCase()
+  });
+
+  console.log('REFERRER', referrer);
+
+  if (!referrer) return null;
+
+  return referrer._id;
+};
+
+
+module.exports.registerUserUseCase = async (data) => {
+  const { password, referralCodeInput } = data;
+  const newReferralCode = await generateReferralCode();
+  let refUser = null;
+  if (referralCodeInput) {
+     refUser = await findReferrerByCode(referralCodeInput);
+  }
+
+  const hashedPassword = await bcrypt.hash(password, 10);
+
+  const user = await createUser({
+    ...data,
+    password: hashedPassword,
+    referralCode: newReferralCode,
+    referredBy:refUser || null
+  });
+
+  return user;
+};
 
 // usecase / service layer
 module.exports.loginuserUsecause = async (data) => {

@@ -6,6 +6,7 @@ const otpModel = require("../Model/OtpModel");
 const ShoperModel = require("../Model/ShoperModel");
 const ShopModel = require("../../Shops/Model/ShopModel");
 const AdminModel = require("../Model/AdminModel")
+const City = require("../Model/City")
 
 module.exports.createUser = asyncHandler(async (data)=>{
     try {
@@ -200,5 +201,56 @@ module.exports.findAdminByUserName = asyncHandler(async(data) => {
     return await AdminModel.findOne({userName: userName});
 });
 
+module.exports.getNearestCities = async (userLat, userLon, limit = 8) => {
+  try {
+    // Validate input
+    if (typeof userLat !== 'number' || typeof userLon !== 'number') {
+      throw new Error('Invalid coordinates: lat and lon must be numbers');
+    }
 
+    const userPoint = {
+      type: 'Point',
+      coordinates: [userLon, userLat] // GeoJSON order: [longitude, latitude]
+    };
+
+    const cities = await City.aggregate([
+      {
+        $geoNear: {
+          near: userPoint,
+          distanceField: 'distance',         // adds distance in meters
+          spherical: true,                   // use spherical geometry (Earth)
+          maxDistance: 500000,               // optional: limit to ~500km (adjust if needed)
+          key: 'location'                    // the field with 2dsphere index
+        }
+      },
+      {
+        $limit: limit                      // get only top 8 nearest
+      },
+      {
+        $project: {
+          name: 1,
+          state: 1,
+          distance: 1,
+          lat: { $arrayElemAt: ['$location.coordinates', 1] },
+          lon: { $arrayElemAt: ['$location.coordinates', 0] },
+          _id: 0
+        }
+      }
+    ]);
+
+    // Optional: convert distance from meters to km and round
+    const formatted = cities.map(city => ({
+      name: city.name,
+      state: city.state,
+      lat: city.lat,
+      lon: city.lon,
+      distanceKm: Math.round(city.distance / 1000) // meters → km
+    }));
+
+    return formatted;
+  } catch (error) {
+    console.error('Error finding nearest cities:', error);
+    throw error;
+  }
+}
 
