@@ -324,9 +324,11 @@ module.exports.verifyOtpFunction = async (otp, mobileNo,role) => {
   }
 };
 
-const CLIENT_ID = '805182446508-gvphqj7e7kigpreinncsi480u4dficea.apps.googleusercontent.com'; // ← Your WEB client ID
-const client = new OAuth2Client(CLIENT_ID);   // ← this line was missing
+const { OAuth2Client } = require('google-auth-library');
 
+// This is your Web Client ID from Google Cloud Console
+const GOOGLE_CLIENT_ID = "805182446508-gvphqj7e7kigpreinncsi480u4dficea.apps.googleusercontent.com";
+const client = new OAuth2Client(GOOGLE_CLIENT_ID);
 
 module.exports.verifyGoogleIdToken = async (data) => {
   try {
@@ -337,10 +339,10 @@ module.exports.verifyGoogleIdToken = async (data) => {
       throw new Error('idToken is required');
     }
 
-    // 1️⃣ Verify Google token
+    // 1️⃣ Verify Google token using the CONSTANT variable
     const ticket = await client.verifyIdToken({
       idToken,
-      audience: process.env.GOOGLE_CLIENT_ID,
+      audience: GOOGLE_CLIENT_ID, // Use the constant here to avoid "Wrong recipient" error
     });
 
     const payload = ticket.getPayload();
@@ -394,10 +396,13 @@ module.exports.verifyGoogleIdToken = async (data) => {
     };
 
   } catch (error) {
-    console.error('Google Auth Error:', error);
-    throw error; // let controller handle response
+    // This will now catch and log the specific error if the token is still invalid
+    console.error('Google Auth Error:', error.message);
+    throw error; 
   }
 };
+
+
 
 
 module.exports.adminLoginUsecause = async (data) => {
