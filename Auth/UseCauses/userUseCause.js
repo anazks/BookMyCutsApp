@@ -324,7 +324,6 @@ module.exports.verifyOtpFunction = async (otp, mobileNo,role) => {
   }
 };
 
-const { OAuth2Client } = require('google-auth-library');
 
 // This is your Web Client ID from Google Cloud Console
 const GOOGLE_CLIENT_ID = "805182446508-gvphqj7e7kigpreinncsi480u4dficea.apps.googleusercontent.com";
