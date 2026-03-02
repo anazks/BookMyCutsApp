@@ -1,8 +1,11 @@
 const express = require('express');
 const router = express.Router();
+const jwt = require('jsonwebtoken');
+const secretkey = process.env.secretKey;
 
 const {checkAvailability,AddBooking,createOrder,getMybooking,findDashboardIncome,verifyPayment,barberFreeSlots,fetchAllAvailableTimeSlots,fetchUpComeingBooking,fetchAllbookings, getbookings} = require('../Controler/BookingController');
 const { verifyToken } = require('../../Middlewares/AuthMiddleWares/AuthMiddleWare');
+const UserModel = require('../../Auth/Model/UserModel');
 
 // const {checkAvailability,AddBooking,getMybooking} = require('../Controler/BookingController')
 router.route('/getAvilablity/:barberId').get(checkAvailability)
@@ -25,6 +28,44 @@ router.route('/fetchAllAvailableTimeSlots').post(fetchAllAvailableTimeSlots)
 router.route('/fetchUpComingBooking/:id').get(fetchUpComeingBooking)
 router.route('/bookings').get(fetchAllbookings)
 router.route('/bookings/:id').get(getbookings)
+router.get('/discount', async (req, res) => {
+  try {
+
+    const token = req.headers['authorization']?.split(' ')[1];
+
+    if (!token) {
+      return res.status(401).json({
+        success: false,
+        message: "No token provided"
+      });
+    }
+
+    const decoded = jwt.verify(token, secretkey);
+    const userId = decoded.id;
+
+    const user = await UserModel.findById(userId).select("referralDiscountAmount");
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found"
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      referralDiscount: user.referralDiscountAmount
+    });
+
+  } catch (error) {
+    console.log("discount error",error)
+    return res.status(401).json({
+      success: false,
+      message: "Invalid token"
+    });
+  }
+});
+
 
 
 module.exports = router;

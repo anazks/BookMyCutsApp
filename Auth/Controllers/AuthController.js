@@ -604,6 +604,7 @@ const updateShopOwner = async (req,res) => {
 const userGoogleSignin = async (req,res) => { 
   try {
     const data = req.body
+    console.log("REQUEST HIT THE BACKEND >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
     const verified = await verifyGoogleIdToken(data)
     console.log(verified,"verified ")
     const token = verified.token

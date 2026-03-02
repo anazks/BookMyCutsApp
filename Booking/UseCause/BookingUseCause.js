@@ -4,7 +4,8 @@ const {checkBookings,addBookings,updateBooking,isSlotConflicting} = require('../
 const WorkingHours = require('../../Shops/Model/WorkingHours')
 const mongoose = require('mongoose');
 const redisClient = require('../../Config/redis')
-const ShopModel = require('../../Shops/Model/ShopModel')
+const ShopModel = require('../../Shops/Model/ShopModel');
+const UserModel = require('../../Auth/Model/UserModel');
 
 module.exports.checkAvailable = async (data) => { 
     try {
@@ -53,6 +54,42 @@ const assignShopOwner = async (
   // 3️⃣ If free → return ownerId, else null
   return conflict ? null : ShopOwnerId;
 };
+
+
+const handleReferralReward = async (booking) => {
+
+  const userB = await UserModel.findById(booking.userId);
+
+  if (!userB || userB.hasCompletedFirstBooking) return;
+
+  // Mark B's first booking completed
+  userB.hasCompletedFirstBooking = true;
+  await userB.save();
+
+  if (!userB.referredBy) return;
+
+  const userA = await UserModel.findById(userB.referredBy);
+  if (!userA) return;
+
+  // Increase completed referral count
+  userA.referralCompletedCount += 1;
+
+  // Calculate discount based on count
+  const count = userA.referralCompletedCount;
+
+  if (count < 5) {
+    userA.referralDiscountAmount = count;
+  } else if (count === 5) {
+    userA.referralDiscountAmount = 10;
+  } else {
+    // After 5, you can restart cycle or cap it
+    userA.referralDiscountAmount = 10;
+  }
+
+  await userA.save();
+  console.log("USER A",userA)
+};
+
 
 
 
@@ -232,11 +269,14 @@ module.exports.bookNow = async (data, decodedValue) => {
     // Step 4: Save to database
     const newBooking = await addBookings(bookingData);
 
+
     // ────────────────────────────────────────────────
     //           RELEASE THE LOCK
     // ────────────────────────────────────────────────
     await redisClient.del(lockKey);
 
+    await handleReferralReward(newBooking)
+    console.log('CALLED HANDLER')
     return newBooking;
 
   } catch (error) {

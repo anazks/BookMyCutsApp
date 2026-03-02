@@ -38,10 +38,18 @@ const UserSchema = new Schema({
         ref: "User",
         default: null
     },
-    referralDiscount: {
+    hasCompletedFirstBooking: {
         type: Boolean,
-        default: false
+         default: false
     },
+    referralCompletedCount: {
+        type: Number,
+        default: 0
+    },
+    referralDiscountAmount: {
+        type: Number,
+        default: 0
+    }
 })
 
 module.exports = mongoose.model('User',UserSchema);
