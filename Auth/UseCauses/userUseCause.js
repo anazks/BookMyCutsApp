@@ -9,6 +9,8 @@ const ShoperModel = require("../Model/ShoperModel");
 const UserModel = require("../Model/UserModel")
 const { OAuth2Client } = require('google-auth-library');
 const crypto = require("crypto");
+require('dotenv').config();
+
 
 
 const secretKey =  process.env.secretKey;
