@@ -39,29 +39,37 @@ module.exports.findNearestShops = async (lng, lat, options = {}) => {
     const { page = 1, limit = 10 } = options;
 
     try {
-        let radius = 2000;        // start 2 km
-        let shops = [];
-        let minResults = 5;       // minimum shops before we stop expanding
-        let maxRadius = 20000;    // 20 km max
-
-        // Phase 1: Collect enough shops by expanding radius
-        while (shops.length < minResults && radius <= maxRadius) {
-            const batch = await findNearbyShopsFunction(lng, lat, radius);
-
-            console.log(`Searched within ${radius}m, found ${batch.length} shops`);
-
-            // Add new shops (you might want to deduplicate in real app)
-            shops = [...shops, ...batch];
-
-            if (shops.length < minResults) {
-                radius += 2000;
-            }
+        // Get total count first (up to max radius)
+        let radius = 2000;
+        let allShops = [];
+        const maxRadius = 20000;
+        
+        // Collect ALL shops once (cache this in production!)
+        while (allShops.length < (page * limit) && radius <= maxRadius) {
+            const batch = await Shop.aggregate([
+                {
+                    $geoNear: {
+                        near: { type: "Point", coordinates: [parseFloat(lng), parseFloat(lat)] },
+                        distanceField: "distance",
+                        spherical: true,
+                        maxDistance: radius,
+                    }
+                },
+                { $sort: { distance: 1 } }
+            ]);
+            
+            // Deduplicate by shop ID
+            const existingIds = new Set(allShops.map(s => s._id.toString()));
+            const newShops = batch.filter(s => !existingIds.has(s._id.toString()));
+            allShops = [...allShops, ...newShops];
+            
+            radius += 2000;
         }
-
-        // Phase 2: Apply pagination on the collected results
+        
+        // Now apply pagination
         const skip = (page - 1) * limit;
-        const paginatedShops = shops.slice(skip, skip + limit);
-
+        const paginatedShops = allShops.slice(skip, skip + limit);
+        
         return paginatedShops;
     } catch (error) {
         console.error("Error in findNearestShops:", error);
