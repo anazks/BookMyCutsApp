@@ -1,6 +1,7 @@
 
 const axios = require("axios");
 const { findNearbyShopsFunction } = require("../Repo/ShopRepo");
+const ShopModel = require("../Model/ShopModel");
 
 module.exports.convertToGeocode = async (data) => {
   try {
@@ -46,7 +47,7 @@ module.exports.findNearestShops = async (lng, lat, options = {}) => {
         
         // Collect ALL shops once (cache this in production!)
         while (allShops.length < (page * limit) && radius <= maxRadius) {
-            const batch = await Shop.aggregate([
+            const batch = await ShopModel.aggregate([
                 {
                     $geoNear: {
                         near: { type: "Point", coordinates: [parseFloat(lng), parseFloat(lat)] },
