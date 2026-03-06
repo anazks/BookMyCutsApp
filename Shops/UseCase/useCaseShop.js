@@ -1,6 +1,7 @@
 
 const axios = require("axios");
 const { findNearbyShopsFunction } = require("../Repo/ShopRepo");
+const ShopModel = require("../Model/ShopModel");
 
 module.exports.convertToGeocode = async (data) => {
   try {
@@ -36,43 +37,65 @@ module.exports.convertToGeocode = async (data) => {
 };
 
 module.exports.findNearestShops = async (lng, lat, options = {}) => {
-    const { page = 1, limit = 10 } = options;
+    const { page = 1, limit = 10, returnMetadata = false } = options;
 
     try {
-        // Get total count first (up to max radius)
-        let radius = 2000;
-        let allShops = [];
-        const maxRadius = 20000;
+        const skip = (page - 1) * limit;
         
-        // Collect ALL shops once (cache this in production!)
-        while (allShops.length < (page * limit) && radius <= maxRadius) {
-            const batch = await Shop.aggregate([
+        // Parse coordinates
+        const longitude = parseFloat(lng);
+        const latitude = parseFloat(lat);
+        
+        // Get paginated shops
+        const shops = await Shop.aggregate([
+            {
+                $geoNear: {
+                    near: { 
+                        type: "Point", 
+                        coordinates: [longitude, latitude] 
+                    },
+                    distanceField: "distance",
+                    spherical: true,
+                    maxDistance: 20000,
+                    key: 'location',
+                }
+            },
+            { $sort: { distance: 1 } },
+            { $skip: skip },
+            { $limit: limit }
+        ]);
+
+        // If returnMetadata is true, return with total count
+        if (returnMetadata) {
+            const countResult = await Shop.aggregate([
                 {
                     $geoNear: {
-                        near: { type: "Point", coordinates: [parseFloat(lng), parseFloat(lat)] },
+                        near: { 
+                            type: "Point", 
+                            coordinates: [longitude, latitude] 
+                        },
                         distanceField: "distance",
                         spherical: true,
-                        maxDistance: radius,
+                        maxDistance: 20000,
+                        key: 'location',
                     }
                 },
-                { $sort: { distance: 1 } }
+                { $count: "total" }
             ]);
-            
-            // Deduplicate by shop ID
-            const existingIds = new Set(allShops.map(s => s._id.toString()));
-            const newShops = batch.filter(s => !existingIds.has(s._id.toString()));
-            allShops = [...allShops, ...newShops];
-            
-            radius += 2000;
+
+            const total = countResult.length > 0 ? countResult[0].total : 0;
+
+            return {
+                shops,
+                total
+            };
         }
+
+        // Otherwise just return the shops array (for backward compatibility)
+        return shops;
         
-        // Now apply pagination
-        const skip = (page - 1) * limit;
-        const paginatedShops = allShops.slice(skip, skip + limit);
-        
-        return paginatedShops;
     } catch (error) {
         console.error("Error in findNearestShops:", error);
-        throw error;
+        return [];
     }
 };

@@ -86,6 +86,10 @@ const bookingSchema = new mongoose.Schema({
     type: Number,
     default: 0
   },
+  shopProfit:{
+    type:Number,
+    default:15
+  },
   createdAt: {
     type: Date,
     default: Date.now
