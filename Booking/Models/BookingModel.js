@@ -86,10 +86,30 @@ const bookingSchema = new mongoose.Schema({
     type: Number,
     default: 0
   },
-  shopProfit:{
-    type:Number,
-    default:15
-  },
+  platformFee: {
+  type: Number,
+  default: 20
+},
+
+salonBonus: {
+  type: Number,
+  default: 5
+},
+
+salonPayoutAmount: {
+  type: Number
+},
+
+payoutStatus: {
+  type: String,
+  enum: ['pending', 'completed', 'failed'],
+  default: 'pending'
+},
+
+payoutId: {
+  type: String
+},
+
   createdAt: {
     type: Date,
     default: Date.now

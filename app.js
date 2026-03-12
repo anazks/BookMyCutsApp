@@ -7,7 +7,7 @@ const connectToDatabase = require('./Config/DbConfig')
 const mongoose = require('mongoose');
 const User = require('./Auth/Model/UserModel')
 const cron = require('node-cron')
-const redisClient = require('./Config/redis')
+// const redisClient = require('./Config/redis')
 
 app.use(cors())
 
@@ -19,6 +19,8 @@ const setupSwagger = require('./swaggerDocs/swaggerConfig');
 const checkExpiredPremium = require('./Shops/ShopScheduler/Scheduler');
 const { seedKeralaCities } = require('./Auth/Controllers/seedCities');
 require('./Cloudinary/CloudinaryConfig')
+require('./Booking/Controler/PayoutShedular')
+require('./Booking/Controler/PayoutWorker')
 
 // Define a route for the root URL
 connectToDatabase();
@@ -63,15 +65,15 @@ const scheduledJob = cron.schedule('0 0 */1 * *', async () => {
 // scheduledJob.start();
 
 
-app.get('/test-redis', async (req, res) => {
-  // Store value
-  await redisClient.set('hello', 'Memurai is working!');
+// app.get('/test-redis', async (req, res) => {
+//   // Store value
+//   await redisClient.set('hello', 'Memurai is working!');
 
-  // Retrieve value
-  const value = await redisClient.get('hello');
+//   // Retrieve value
+//   const value = await redisClient.get('hello');
 
-  res.json({ message: value });
-});
+//   res.json({ message: value });
+// });
 
 console.log("Cron job scheduled successfully - will run every 10 minutes");
 

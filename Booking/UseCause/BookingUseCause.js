@@ -223,13 +223,22 @@ module.exports.bookNow = async (data, decodedValue) => {
 }
 
     }
-
+    
+  const shopId = data.shopId
+  const shopData = await ShopModel.findById(shopId); 
+  if (!shopData) {
+    throw new Error("Shop not found in database");
+  }
+  const shopOwnerId = shopData.ShopOwnerId; 
+  console.log("✅ shop Data",shopData)
+  console.log("✅ Shop ID:", shopId);
+  console.log("✅ Owner ID:", shopOwnerId);
     // Step 3: Prepare booking data
     const bookingData = {
       barberId: new mongoose.Types.ObjectId(data.barberId),
       userId: new mongoose.Types.ObjectId(data.userId),
-      shopId: new mongoose.Types.ObjectId(data.shopId),
-      shopOwnerId: shopOwner || null,
+      shopId: new mongoose.Types.ObjectId(shopId),
+      shopOwnerId: shopOwnerId || null,
       serviceIds: data.serviceIds?.map(id => new mongoose.Types.ObjectId(id)) || [],
       services: data.services?.map(service => ({
         id: new mongoose.Types.ObjectId(service.id),

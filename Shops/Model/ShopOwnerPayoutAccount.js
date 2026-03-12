@@ -14,10 +14,9 @@ const ShopOwnerPayoutAccountSchema = new mongoose.Schema(
       required: true
     },
 
-    accountNumber: {
+  accountNumber: {
       type: String,
       required: true,
-      select: false
     },
 
     ifsc: {

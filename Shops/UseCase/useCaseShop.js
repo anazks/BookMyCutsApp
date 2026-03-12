@@ -40,34 +40,14 @@ module.exports.findNearestShops = async (lng, lat, options = {}) => {
     const { page = 1, limit = 10, returnMetadata = false } = options;
 
     try {
-        const skip = (page - 1) * limit;
+        // Get total count first (up to max radius)
+        let radius = 2000;
+        let allShops = [];
+        const maxRadius = 20000;
         
-        // Parse coordinates
-        const longitude = parseFloat(lng);
-        const latitude = parseFloat(lat);
-        
-        // Get paginated shops
-        const shops = await Shop.aggregate([
-            {
-                $geoNear: {
-                    near: { 
-                        type: "Point", 
-                        coordinates: [longitude, latitude] 
-                    },
-                    distanceField: "distance",
-                    spherical: true,
-                    maxDistance: 20000,
-                    key: 'location',
-                }
-            },
-            { $sort: { distance: 1 } },
-            { $skip: skip },
-            { $limit: limit }
-        ]);
-
-        // If returnMetadata is true, return with total count
-        if (returnMetadata) {
-            const countResult = await Shop.aggregate([
+        // Collect ALL shops once (cache this in production!)
+        while (allShops.length < (page * limit) && radius <= maxRadius) {
+            const batch = await ShopModel.aggregate([
                 {
                     $geoNear: {
                         near: { 

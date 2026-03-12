@@ -7,6 +7,7 @@ const { trace } = require('../Router/BookingRouter');
 const crypto = require('crypto'); // CommonJS
 const BookingModel = require('../Models/BookingModel');
 const ShopModel  = require('../../Shops/Model/ShopModel')
+const payoutQueue = require('./payoutQueue')
  
 
 const nodemailer = require('nodemailer');
@@ -55,7 +56,78 @@ const createOrder = async (req, res) => {
   }
 }
 
-const verifyPayment = async (req, res) => {
+  // const verifyPayment = async (req, res) => {
+  //   console.log("verify payment started...");
+  //   try {
+  //     const {
+  //       razorpay_payment_id,
+  //       razorpay_order_id,
+  //       razorpay_signature,
+  //       paymentType,
+  //       amount,
+  //       bookingId,
+  //       email
+  //     } = req.body;
+
+  //     if (!razorpay_payment_id || !razorpay_order_id || !razorpay_signature) {
+  //       return res.status(400).json({ success: false, message: 'Missing required fields' });
+  //     }
+
+  //     // Razorpay signature verification (fast)
+  //     const crypto = require('crypto');
+  //     const expectedSignature = crypto
+  //       .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET)
+  //       .update(`${razorpay_order_id}|${razorpay_payment_id}`)
+  //       .digest('hex');
+
+  //     if (expectedSignature !== razorpay_signature) {
+  //       return res.status(400).json({ success: false, message: 'Invalid signature' });
+  //     }
+
+  //     // Update booking (faster version)
+  //     const remainingAmount = paymentType === 'full' ? 0 : Math.max((req.body.totalPrice || amount) - amount, 0);
+  //     const updatedBooking = await BookingModel.findByIdAndUpdate(
+  //       bookingId,
+  //       {
+  //         paymentId: razorpay_payment_id,
+  //         paymentType,
+  //         amountPaid: Number(amount),
+  //         remainingAmount,
+  //         paymentStatus: paymentType === 'full' ? 'paid' : 'partial',
+  //         bookingStatus: 'confirmed'
+  //       },
+  //       { new: true, lean: true }
+  //     );
+
+  //     if (!updatedBooking) {
+  //       return res.status(404).json({ success: false, message: 'Booking not found' });
+  //     }
+
+  //     // Send confirmation email asynchronously
+  //     sendConfirmationMail(bookingId, email)
+  //       .then(() => console.log('Email sent'))
+  //       .catch(err => console.error('Email error:', err));
+
+  //     // Respond immediately
+  //     return res.status(200).json({
+  //       success: true,
+  //       message: 'Payment verification successful',
+  //       data: {
+  //         paymentId: razorpay_payment_id,
+  //         orderId: razorpay_order_id,
+  //         amount,
+  //         paymentType
+  //       }
+  //     });
+
+  //   } catch (error) {
+  //     console.error('Payment verification error:', error);
+  //     return res.status(500).json({ success: false, message: 'Internal server error', error: error.message });
+  //   }
+  // };
+
+
+  const verifyPayment = async (req, res) => {
   console.log("verify payment started...");
   try {
     const {
@@ -72,7 +144,7 @@ const verifyPayment = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Missing required fields' });
     }
 
-    // Razorpay signature verification (fast)
+    // Razorpay signature verification
     const crypto = require('crypto');
     const expectedSignature = crypto
       .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET)
@@ -83,7 +155,7 @@ const verifyPayment = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Invalid signature' });
     }
 
-    // Update booking (faster version)
+    // Update booking
     const remainingAmount = paymentType === 'full' ? 0 : Math.max((req.body.totalPrice || amount) - amount, 0);
     const updatedBooking = await BookingModel.findByIdAndUpdate(
       bookingId,
@@ -102,6 +174,28 @@ const verifyPayment = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Booking not found' });
     }
 
+    // --- TRIGGER QUEUE START ---
+    // We trigger the payout queue only if money was actually received
+    try {
+      await payoutQueue.add(
+        'process-dummy-payout', 
+        { 
+          bookingId: updatedBooking._id,
+          shopOwnerId: updatedBooking.shopOwnerId 
+        },
+        { 
+         jobId: updatedBooking._id.toString(), // Prevents duplicate jobs!
+          attempts: 3, 
+          backoff: { type: 'exponential', delay: 2000 }
+        }
+      );
+      console.log(`[Queue] Payout job queued for Booking: ${bookingId}`);
+    } catch (queueError) {
+      // We don't want to fail the whole response if only the queue fails
+      console.error('Queue Trigger Error:', queueError);
+    }
+    // --- TRIGGER QUEUE END ---
+
     // Send confirmation email asynchronously
     sendConfirmationMail(bookingId, email)
       .then(() => console.log('Email sent'))
@@ -110,7 +204,7 @@ const verifyPayment = async (req, res) => {
     // Respond immediately
     return res.status(200).json({
       success: true,
-      message: 'Payment verification successful',
+      message: 'Payment verification successful and payout queued',
       data: {
         paymentId: razorpay_payment_id,
         orderId: razorpay_order_id,
@@ -124,6 +218,9 @@ const verifyPayment = async (req, res) => {
     return res.status(500).json({ success: false, message: 'Internal server error', error: error.message });
   }
 };
+
+
+
 
 
 
