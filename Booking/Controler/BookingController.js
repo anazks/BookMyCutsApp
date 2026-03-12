@@ -178,7 +178,7 @@ const createOrder = async (req, res) => {
     // We trigger the payout queue only if money was actually received
     try {
       await payoutQueue.add(
-        'process-dummy-payout', 
+        'process-live-payout', 
         { 
           bookingId: updatedBooking._id,
           shopOwnerId: updatedBooking.shopOwnerId 
