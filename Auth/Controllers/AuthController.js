@@ -724,5 +724,60 @@ async function getNearbyCitiesController(req, res) {
 }
 
 
+const saveNotificationToken = async (req, res) => {
+  try {
+    // 1. Extract the JWT from the Authorization Header
+    const authHeader = req.headers.authorization;
+    
+    // Check if header exists and starts with 'Bearer '
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ message: "Access denied. No token provided." });
+    }
 
-module.exports = {getNearbyCitiesController,adminLogin,AdminRegistration,userGoogleSignin,updateShopOwner,removeShopOwner,resetPassword,verifyForgotPasswordOtp,forgotPassword,viewAllShopOwners,deleteUser,userRegistration,userLogin,ShopRegister,login,getUsers,getProfile,otpRequest,verifyOtp,fetchUser}
+    const token = authHeader.split(' ')[1]; // Get the actual token string
+
+    // 2. Decode and Verify the User ID
+    const secretKey = process.env.secretKey || "iamAnaz";
+    const decoded = jwt.verify(token, secretKey);
+    
+    // Most JWTs store the ID in 'id' or 'userId'. Adjust based on your login payload.
+    const userId = decoded.id || decoded.userId; 
+
+    // 3. Get the Push Token from Params (as per your code setup)
+    const pushToken = req.params.token;
+
+    // 4. Update the User Model
+    // We use findByIdAndUpdate to target the specific user and update their PushToken field
+    const user = await userModel.findByIdAndUpdate(
+      userId,
+      { PushToken: pushToken }, // Your model uses 'PushToken' (Capital P)
+      { new: true } // Returns the updated document
+    );
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    res.status(200).json({ 
+      success: true, 
+      message: "Push token saved successfully" 
+    });
+
+  } catch (error) {
+    console.log("Error in saveNotificationToken:", error);
+
+    // Handle specific JWT errors
+    if (error.name === 'JsonWebTokenError') {
+      return res.status(401).json({ message: "Invalid Token" });
+    }
+    if (error.name === 'TokenExpiredError') {
+      return res.status(401).json({ message: "Token Expired" });
+    }
+
+    res.status(500).json({ message: "Internal Server Error" });
+  }
+};
+
+
+
+module.exports = {getNearbyCitiesController,adminLogin,AdminRegistration,userGoogleSignin,updateShopOwner,removeShopOwner,resetPassword,verifyForgotPasswordOtp,forgotPassword,viewAllShopOwners,deleteUser,userRegistration,userLogin,ShopRegister,login,getUsers,getProfile,otpRequest,verifyOtp,fetchUser,saveNotificationToken}

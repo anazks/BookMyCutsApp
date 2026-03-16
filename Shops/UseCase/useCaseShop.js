@@ -37,7 +37,7 @@ module.exports.convertToGeocode = async (data) => {
 };
 
 module.exports.findNearestShops = async (lng, lat, options = {}) => {
-    const { page = 1, limit = 10, returnMetadata = false } = options;
+    const { page = 1, limit = 10 } = options;
 
     try {
         // Get total count first (up to max radius)
@@ -50,32 +50,30 @@ module.exports.findNearestShops = async (lng, lat, options = {}) => {
             const batch = await ShopModel.aggregate([
                 {
                     $geoNear: {
-                        near: { 
-                            type: "Point", 
-                            coordinates: [longitude, latitude] 
-                        },
+                        near: { type: "Point", coordinates: [parseFloat(lng), parseFloat(lat)] },
                         distanceField: "distance",
                         spherical: true,
-                        maxDistance: 20000,
-                        key: 'location',
+                        maxDistance: radius,
                     }
                 },
-                { $count: "total" }
+                { $sort: { distance: 1 } }
             ]);
-
-            const total = countResult.length > 0 ? countResult[0].total : 0;
-
-            return {
-                shops,
-                total
-            };
+            
+            // Deduplicate by shop ID
+            const existingIds = new Set(allShops.map(s => s._id.toString()));
+            const newShops = batch.filter(s => !existingIds.has(s._id.toString()));
+            allShops = [...allShops, ...newShops];
+            
+            radius += 2000;
         }
-
-        // Otherwise just return the shops array (for backward compatibility)
-        return shops;
         
+        // Now apply pagination
+        const skip = (page - 1) * limit;
+        const paginatedShops = allShops.slice(skip, skip + limit);
+        
+        return paginatedShops;
     } catch (error) {
         console.error("Error in findNearestShops:", error);
-        return [];
+        throw error;
     }
 };

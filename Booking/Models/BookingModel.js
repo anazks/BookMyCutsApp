@@ -102,7 +102,7 @@ salonPayoutAmount: {
 
 payoutStatus: {
   type: String,
-  enum: ['pending', 'completed', 'failed'],
+  enum: ['pending', 'completed', 'failed', 'processing'],
   default: 'pending'
 },
 

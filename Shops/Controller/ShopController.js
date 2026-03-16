@@ -928,39 +928,29 @@ const findNearByShops = async (req, res) => {
             });
         }
 
-        // Call findNearestShops and handle both return formats
-        const result = await findNearestShops(lng, lat, {
+        const shops = await findNearestShops(lng, lat, {
             page: pageNum,
             limit: limitNum
         });
 
-        // Handle different return formats
-        let shops = [];
-        let total = 0;
-
-        if (Array.isArray(result)) {
-            // Old format: just returns array of shops
-            shops = result;
-            total = shops.length; // We don't know total, so use current count
-        } else if (result && typeof result === 'object') {
-            // New format: returns { shops, total }
-            shops = result.shops || [];
-            total = result.total || shops.length;
+        if (shops.length > 0) {
+            return res.status(200).json({
+                success: true,
+                message: "Successfully fetched nearby shops",
+                shops,
+                // Optional: add metadata
+                pagination: {
+                    page: pageNum,
+                    limit: limitNum,
+                    returned: shops.length
+                }
+            });
         }
 
-        return res.status(200).json({
-            success: true,
-            message: shops.length > 0 ? "Successfully fetched nearby shops" : "No shops found for this page",
-            shops,
-            pagination: {
-                page: pageNum,
-                limit: limitNum,
-                total: total,
-                hasMore: (pageNum * limitNum) < total,
-                returned: shops.length
-            }
+        return res.status(404).json({
+            success: false,
+            message: "No nearby shops found"
         });
-        
     } catch (error) {
         console.error("Error in findNearByShops:", error);
         return res.status(500).json({

@@ -1,5 +1,5 @@
 const express = require('express');
-const { adminLogin,userRegistration,userLogin,ShopRegister,login,getUsers,getProfile,otpRequest,verifyOtp,deleteUser,viewAllShopOwners,forgotPassword,verifyForgotPasswordOtp,resetPassword,fetchUser,removeShopOwner,updateShopOwner,userGoogleSignin,AdminRegistration,getNearbyCitiesController} = require('../Controllers/AuthController');
+const { adminLogin,userRegistration,userLogin,ShopRegister,login,getUsers,getProfile,otpRequest,verifyOtp,deleteUser,viewAllShopOwners,forgotPassword,verifyForgotPasswordOtp,resetPassword,fetchUser,removeShopOwner,updateShopOwner,userGoogleSignin,AdminRegistration,getNearbyCitiesController,saveNotificationToken} = require('../Controllers/AuthController');
 const { verifyToken } = require('../../Middlewares/AuthMiddleWares/AuthMiddleWare');
 const router = express.Router(); 
 
@@ -39,7 +39,6 @@ router.route('/admin-registration').post(AdminRegistration)
 router.route('/admin-login').post(adminLogin)
 
 router.route('/cities').get(getNearbyCitiesController)
-
-// router.route('/userLogin').post(userLogin)
+router.post('/register-push-token/:token', saveNotificationToken);
 
 module.exports = router;

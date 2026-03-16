@@ -7,8 +7,8 @@ const jwt = require('jsonwebtoken');
 const secretkey = process.env.secretKey; 
 
 // Prepare Basic Auth for Razorpay
-const RAZORPAY_KEY = process.env.RAZORPAY_KEY_ID;
-const RAZORPAY_SECRET = process.env.RAZORPAY_KEY_SECRET;
+const RAZORPAY_KEY = process.env.RAZORPAYX_KEY_ID;
+const RAZORPAY_SECRET = process.env.RAZORPAYX_KEY_SECRET;
 const authHeader = `Basic ${Buffer.from(`${RAZORPAY_KEY}:${RAZORPAY_SECRET}`).toString('base64')}`;
 
 const upsertPayoutAccount = async (req, res) => {

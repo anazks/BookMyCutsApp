@@ -49,6 +49,9 @@ const UserSchema = new Schema({
     referralDiscountAmount: {
         type: Number,
         default: 0
+    },
+    PushToken:{
+        type:String,
     }
 })
 
