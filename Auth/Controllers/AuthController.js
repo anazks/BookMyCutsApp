@@ -8,7 +8,11 @@ const otpModel = require('../Model/OtpModel')
 const crypto = require('crypto');
 const nodemailer = require('nodemailer');
 const bcrypt = require('bcryptjs')
+const Booking = require('../../Booking/Models/BookingModel')
 const AdminModel = require('../Model/AdminModel')
+const User = require('../Model/UserModel')
+const { sendAndSaveNotification } = require('../../utils/notificationHelper')
+const Notification = require('../Model/Notification')
 
 
 
@@ -777,7 +781,109 @@ const saveNotificationToken = async (req, res) => {
     res.status(500).json({ message: "Internal Server Error" });
   }
 };
+ 
+const sendArrivalCheckNotification = async (req, res) => {
+  try {
+    // 1. Get the userId directly from the URL
+    const { userId } = req.params;
+    
+    // Optional: Get bookingId from the request body if the frontend sends it
+    const { bookingId } = req.body; 
+
+    // 2. Find the user directly in the database
+    const user = await User.findById(userId);
+
+    // 3. Safety Check A: Does the user exist?
+    if (!user) {
+      return res.status(404).json({ 
+        success: false, 
+        message: 'User not found.' 
+      });
+    }
+
+    // 4. Safety Check B: Does the user have a push token saved?
+    if (!user.PushToken) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'This customer does not have notifications enabled.' 
+      });
+    }
+
+    // 5. Send the interactive push notification
+    await sendAndSaveNotification({
+      recipientId: user._id,
+      accountType: 'User',
+      pushToken: user.PushToken,
+      title: 'Are you on your way? ✂️',
+      body: 'Your barber is ready! Will you be arriving on time?',
+      type: 'ARRIVAL_CHECK',
+      // Pass the bookingId here so the user's phone knows which appointment to update
+      data: { bookingId: bookingId || null }, 
+      categoryId: 'arrival_check' 
+    });
+
+    res.status(200).json({ 
+      success: true, 
+      message: 'Arrival check sent to the customer successfully.' 
+    });
+
+  } catch (error) {
+    console.error('Error in sendArrivalCheckNotification:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Failed to send notification to customer.',
+      error: error.message 
+    });
+  }
+};
+
+const fetchMyNotifications = async (req, res) => {
+  try {
+    // 1. Extract the Authorization header from the incoming request
+    const authHeader = req.headers.authorization;
+    
+    // 2. Check if the token actually exists and is formatted correctly
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ 
+        success: false, 
+        message: 'Access Denied: No token provided.' 
+      });
+    }
+
+    // 3. Split the string "Bearer <token_string>" to get just the token
+    const token = authHeader.split(' ')[1];
+
+    // 4. Verify and decode the token using your secret key
+    // Note: Ensure 'secretKey' exactly matches the casing in your .env file
+    const decoded = jwt.verify(token, process.env.secretKey);
+
+    // 5. Grab the ID straight from the decoded payload
+    // (If you signed it as _id instead of id, change this to decoded._id)
+    const documentId = decoded.id; 
+
+    // 6. Fetch directly using ONLY the recipientId. 
+    const notifications = await Notification.find({ recipientId: documentId })
+      .sort({ createdAt: -1 }) // Newest first
+      .limit(30);              // Keep it fast by only loading the latest 30
+
+    res.status(200).json({ 
+      success: true, 
+      data: notifications 
+    });
+  } catch (error) {
+    console.error('Error fetching notifications:', error);
+    if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
+      return res.status(401).json({ 
+        success: false, 
+        message: 'Invalid or expired token. Please log in again.' 
+      });
+    }
+    res.status(500).json({ 
+      success: false, 
+      message: 'Failed to fetch notifications.' 
+    });
+  }
+};
 
 
-
-module.exports = {getNearbyCitiesController,adminLogin,AdminRegistration,userGoogleSignin,updateShopOwner,removeShopOwner,resetPassword,verifyForgotPasswordOtp,forgotPassword,viewAllShopOwners,deleteUser,userRegistration,userLogin,ShopRegister,login,getUsers,getProfile,otpRequest,verifyOtp,fetchUser,saveNotificationToken}
+module.exports = {fetchMyNotifications,sendArrivalCheckNotification,getNearbyCitiesController,adminLogin,AdminRegistration,userGoogleSignin,updateShopOwner,removeShopOwner,resetPassword,verifyForgotPasswordOtp,forgotPassword,viewAllShopOwners,deleteUser,userRegistration,userLogin,ShopRegister,login,getUsers,getProfile,otpRequest,verifyOtp,fetchUser,saveNotificationToken}
