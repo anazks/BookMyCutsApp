@@ -1,0 +1,81 @@
+### 1. Send to EVERYONE (All Users AND All Shop Owners)
+POST http://localhost:3002/api/auth/send-notification
+Content-Type: application/json
+
+{
+  "audience": "ALL",
+  "title": "Global System Update",
+  "body": "The system will be undergoing maintenance tonight.",
+  "type": "ADMIN_MESSAGE"
+}
+
+###
+
+### 2. Send to ONLY Regular Users
+POST http://localhost:3002/api/auth/send-notification
+Content-Type: application/json
+
+{
+  "audience": "ALL_USERS",
+  "title": "Weekend Promo! 🎉",
+  "body": "Get 20% off your next haircut. Book now!",
+  "type": "PROMO",
+  "data": {
+    "discountCode": "WEEKEND20",
+    "link": "bookmycuts://promo"
+  }
+}
+
+###
+
+### 3. Send to ONLY Shop Owners
+POST http://localhost:3002/api/auth/send-notification
+Content-Type: application/json
+
+{
+  "audience": "ALL_SHOP_OWNERS",
+  "title": "New Payout System",
+  "body": "We have updated our payout schedules. Check your dashboard.",
+  "type": "ADMIN_MESSAGE"
+}
+
+###
+
+### 4. Send to SPECIFIC Regular Users (Need their MongoDB _id)
+POST http://localhost:3002/api/auth/send-notification
+Content-Type: application/json
+
+{
+  "audience": "SPECIFIC",
+  "accountType": "User",
+  "specificIds": [
+    "REPLACE_WITH_USER_ID_1",
+    "REPLACE_WITH_USER_ID_2"
+  ],
+  "title": "Your Booking is Confirmed! ✅",
+  "body": "Your appointment for tomorrow at 10:00 AM is confirmed.",
+  "type": "BOOKING_CONFIRMED",
+  "data": {
+    "bookingId": "REPLACE_WITH_BOOKING_ID"
+  }
+}
+
+###
+
+### 5. Send to SPECIFIC Shop Owners (Need their MongoDB _id)
+POST http://localhost:3002/api/auth/send-notification
+Content-Type: application/json
+
+{
+  "audience": "SPECIFIC",
+  "accountType": "shopOwner",
+  "specificIds": [
+    "REPLACE_WITH_SHOP_OWNER_ID"
+  ],
+  "title": "New Booking Received!",
+  "body": "You have a new booking for 10:00 AM.",
+  "type": "NEW_BOOKING",
+  "data": {
+    "bookingId": "REPLACE_WITH_BOOKING_ID"
+  }
+}

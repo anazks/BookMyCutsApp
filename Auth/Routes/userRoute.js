@@ -44,4 +44,16 @@ router.post('/register-push-token/:token', saveNotificationToken);
 router.post('/confirm-arrival/:userId',sendArrivalCheckNotification)
 router.get('/notification',fetchMyNotifications)
 
+// ADMIN / CUSTOM NOTIFICATION
+const { sendCustomNotification } = require('../Controllers/NotificationController');
+router.route('/send-notification').post(sendCustomNotification);
+
+//CUSTOMIZATION API
+const upload = require('../../Cloudinary/MulterConfig');
+const { createCustomization, getCustomization } = require('../Controllers/CustomizationController');
+
+router.route('/customization')
+    .post(upload.single('backgroundImage'), createCustomization)
+    .get(getCustomization);
+
 module.exports = router;

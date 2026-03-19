@@ -167,19 +167,29 @@ module.exports.getAllBookingsOfShop = async (
     const shopIds = shops.map(shop => shop._id);
 
     const skip = (page - 1) * limit;
+    
+    // Get start of today to include all bookings for the current day
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
 
     // 2️⃣ Fetch bookings with pagination
     const [bookings, total] = await Promise.all([
-      BookingModel.find({ shopId: { $in: shopIds } })
+      BookingModel.find({ 
+        shopId: { $in: shopIds },
+        "timeSlot.startingTime": { $gte: startOfToday } // Filter for today and future 
+      })
         .populate("userId", "firstName")
         .populate("barberId", "BarberName")
         .populate("shopId", "shopName")
-        .sort({ createdAt: -1 })
+        .sort({ "timeSlot.startingTime": 1 }) // Sort ascending: nearest upcoming booking first
         .skip(skip)
         .limit(limit)
         .lean(),
 
-      BookingModel.countDocuments({ shopId: { $in: shopIds } })
+      BookingModel.countDocuments({ 
+        shopId: { $in: shopIds },
+        "timeSlot.startingTime": { $gte: startOfToday }
+      })
     ]);
 
     return { bookings, total };
