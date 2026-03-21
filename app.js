@@ -19,8 +19,6 @@ const setupSwagger = require('./swaggerDocs/swaggerConfig');
 const checkExpiredPremium = require('./Shops/ShopScheduler/Scheduler');
 const { seedKeralaCities } = require('./Auth/Controllers/seedCities');
 require('./Cloudinary/CloudinaryConfig')
-require('./Booking/Controler/PayoutShedular')
-require('./Booking/Controler/PayoutWorker')
 
 // Define a route for the root URL
 connectToDatabase();
@@ -49,7 +47,7 @@ const scheduledJob = cron.schedule('0 0 */1 * *', async () => {
       console.error("checkExpiredPremium is not a function");
       return;
     }
-    
+
     const result = await checkExpiredPremium();
     console.log("Expired premium check completed successfully", result);
   } catch (error) {
@@ -83,7 +81,7 @@ console.log("Cron job scheduled successfully - will run every 10 minutes");
 app.listen(port, () => {
   console.log(`Server is running at http://localhost:${port}`);
   setupSwagger(app);
-  
+
   // Optional: Run the check once immediately when server starts
   console.log("Running initial premium check...");
   checkExpiredPremium().catch(error => {

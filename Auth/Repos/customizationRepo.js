@@ -2,10 +2,22 @@ const CustomizationModel = require('../Model/CustomizationModel');
 
 module.exports.createCustomization = async (data) => {
     try {
-        const customization = await CustomizationModel.create(data);
+        // Attempt to drop the old shopId index to prevent E11000 duplicate key errors
+        try {
+            await CustomizationModel.collection.dropIndex('shopId_1');
+        } catch (e) {
+            // Ignore if index doesn't exist
+        }
+
+        // Maintain only one single global civilization document via upsert
+        const customization = await CustomizationModel.findOneAndUpdate(
+            {}, 
+            { $set: data },
+            { new: true, upsert: true } // Create if missing, otherwise update the existing single doc
+        );
         return customization;
     } catch (error) {
-        console.error('Error creating customization:', error);
+        console.error('Error upserting customization:', error);
         throw error;
     }
 };

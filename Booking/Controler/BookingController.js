@@ -7,8 +7,6 @@ const { trace } = require('../Router/BookingRouter');
 const crypto = require('crypto'); // CommonJS
 const BookingModel = require('../Models/BookingModel');
 const ShopModel  = require('../../Shops/Model/ShopModel')
-const payoutQueue = require('./payoutQueue')
- 
 
 const nodemailer = require('nodemailer');
 
@@ -173,28 +171,6 @@ const createOrder = async (req, res) => {
     if (!updatedBooking) {
       return res.status(404).json({ success: false, message: 'Booking not found' });
     }
-
-    // --- TRIGGER QUEUE START ---
-    // We trigger the payout queue only if money was actually received
-    try {
-      await payoutQueue.add(
-        'process-live-payout', 
-        { 
-          bookingId: updatedBooking._id,
-          shopOwnerId: updatedBooking.shopOwnerId 
-        },
-        { 
-         jobId: updatedBooking._id.toString(), // Prevents duplicate jobs!
-          attempts: 3, 
-          backoff: { type: 'exponential', delay: 2000 }
-        }
-      );
-      console.log(`[Queue] Payout job queued for Booking: ${bookingId}`);
-    } catch (queueError) {
-      // We don't want to fail the whole response if only the queue fails
-      console.error('Queue Trigger Error:', queueError);
-    }
-    // --- TRIGGER QUEUE END ---
 
     // Send confirmation email asynchronously
     sendConfirmationMail(bookingId, email)
