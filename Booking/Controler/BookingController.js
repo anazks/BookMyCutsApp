@@ -56,6 +56,7 @@ const createOrder = async (req, res) => {
 
     res.status(200).json(order);
   } catch (err) {
+    console.log("FULL RAZORPAY ERROR:", JSON.stringify(err, null, 2));
     console.error("Order Creation Error:", err);
     res.status(500).json({
       error: 'Order creation failed',
