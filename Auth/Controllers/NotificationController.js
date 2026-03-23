@@ -3,6 +3,7 @@ const { sendCustomNotificationUseCase } = require('../UseCauses/notificationUseC
 const sendCustomNotification = async (req, res) => {
     try {
         const { audience, accountType, specificIds, title, body, type, data } = req.body;
+        console.log(req.body);
 
         // Validation
         if (!audience) {
@@ -11,7 +12,7 @@ const sendCustomNotification = async (req, res) => {
         if (!title || !body) {
             return res.status(400).json({ success: false, message: "title and body are required." });
         }
-        
+
         if (audience === 'SPECIFIC') {
             if (!accountType) {
                 return res.status(400).json({ success: false, message: "accountType (User / shopOwner) is required when audience is SPECIFIC." });
