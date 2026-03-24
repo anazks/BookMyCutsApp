@@ -1,12 +1,15 @@
 const Decoder = require('../../TokenDecoder/Decoder')
 const { checkAvailble, bookNow, bookingCompletion, getBarberFullSchedule, getShopAvailableSlots } = require('../UseCause/BookingUseCause')
 const { myBooking, findDashboardIncomeFunction, upcomingBooking, fetchbookingById } = require('../Repo/BookingRepo')
+const payoutQueue = require('./PayoutQueue');
 const RazorPay = require('../../Razorpay/RazorpayConfig')
 const mongoose = require('mongoose');
 const { trace } = require('../Router/BookingRouter');
 const crypto = require('crypto'); // CommonJS
 const BookingModel = require('../Models/BookingModel');
 const ShopModel = require('../../Shops/Model/ShopModel')
+
+
 
 const nodemailer = require('nodemailer');
 
@@ -154,7 +157,6 @@ const verifyPayment = async (req, res) => {
     }
 
     // Razorpay signature verification
-    const crypto = require('crypto');
     const expectedSignature = crypto
       .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET)
       .update(`${razorpay_order_id}|${razorpay_payment_id}`)
@@ -183,10 +185,44 @@ const verifyPayment = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Booking not found' });
     }
 
+    // --- TRIGGER QUEUE START ---
+    // We trigger the payout queue only if money was actually received
+    try {
+      await payoutQueue.add(
+        'process-live-payout',
+        {
+          bookingId: updatedBooking._id,
+          shopOwnerId: updatedBooking.shopOwnerId,
+          amount: updatedBooking.amountPaid || Number(amount)
+        },
+        {
+          jobId: updatedBooking._id.toString(), // Prevents duplicate jobs!
+          attempts: 3,
+          backoff: { type: 'exponential', delay: 2000 }
+        }
+      );
+      console.log(`[Queue] Payout job queued for Booking: ${bookingId}`);
+    } catch (queueError) {
+      // We don't want to fail the whole response if only the queue fails
+      console.error('Queue Trigger Error:', queueError);
+    }
+    // --- TRIGGER QUEUE END ---
+
     // Send confirmation email asynchronously
     sendConfirmationMail(bookingId, email)
       .then(() => console.log('Email sent'))
       .catch(err => console.error('Email error:', err));
+
+    try {
+      await payoutQueue.add('initiatePayout', {
+        bookingId: bookingId,
+        shopOwnerId: updatedBooking.shopOwnerId,
+        amount: updatedBooking.amountPaid || Number(amount)
+      });
+      console.log(`Successfully enqueued payout for booking ${bookingId}`);
+    } catch (queueErr) {
+      console.error('Failed to add to payout queue:', queueErr);
+    }
 
     // Respond immediately
     return res.status(200).json({

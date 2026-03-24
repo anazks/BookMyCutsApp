@@ -2,25 +2,25 @@ const { response } = require("express")
 const BookingModel = require("../Models/BookingModel")
 const mongoose = require("mongoose");
 
-module.exports.checkBookings = async(data)=>{
-    try {
-        
-    } catch (error) {
-        
-    }
+module.exports.checkBookings = async (data) => {
+  try {
+
+  } catch (error) {
+
+  }
 }
-module.exports.addBookings = async(data)=>{
-    try {
-        let bookings = await BookingModel.create(data)
-            console.log("BOOKING DOCUMENT:",bookings)
-            return bookings
-    } catch (error) {
-        console.log(error)
-        return error
-    }
+module.exports.addBookings = async (data) => {
+  try {
+    let bookings = await BookingModel.create(data)
+    console.log("BOOKING DOCUMENT:", bookings)
+    return bookings
+  } catch (error) {
+    console.log(error)
+    return error
+  }
 }
 
-module.exports. isSlotConflicting = async (
+module.exports.isSlotConflicting = async (
   barberId,
   bookingDate,
   startDateTime,
@@ -32,22 +32,22 @@ module.exports. isSlotConflicting = async (
     // Make sure bookingDate is the same DAY
     bookingDate: new Date(bookingDate),
 
-    bookingStatus: { $in: ["pending", "confirmed"] },
+    bookingStatus: { $in: ["confirmed"] },
 
     "timeSlot.startingTime": { $lt: endDateTime },
     "timeSlot.endingTime": { $gt: startDateTime }
   });
 
-  console.log(conflict, "already bookings");  
+  console.log(conflict, "already bookings");
   return !!conflict;
 };
 
 
 module.exports.myBooking = async (userId, limit = 10, lastDate = null) => {
   try {
-     
-      const allBookings = await BookingModel.find({});
-      
+
+    const allBookings = await BookingModel.find({});
+
     const query = { userId };
     if (lastDate) query.createdAt = { $lt: new Date(lastDate) };
 
@@ -69,7 +69,7 @@ module.exports.myBooking = async (userId, limit = 10, lastDate = null) => {
           // 1️⃣ If barberId is a real barber (BarberName exists)
           if (booking.barberId.BarberName) {
             performedBy = booking.barberId.BarberName;
-          } 
+          }
           // 2️⃣ If barberId is a shop owner (not in Barabar)
           else {
             const owner = await ShopOwnerModel.findById(booking.barberId)
@@ -101,7 +101,7 @@ module.exports.myBooking = async (userId, limit = 10, lastDate = null) => {
 
 module.exports.findDashboardIncomeFunction = async (shopId) => {
   console.log('🔍 [DASHBOARD] Starting income calc for shopId:', shopId);
-  
+
   if (!mongoose.Types.ObjectId.isValid(shopId)) {
     console.error('❌ [DASHBOARD] Invalid shop ID:', shopId);
     throw new Error('Invalid shop ID');
@@ -110,13 +110,13 @@ module.exports.findDashboardIncomeFunction = async (shopId) => {
   try {
     const now = new Date();
     console.log('📅 [DASHBOARD] Current time (IST):', now.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }));
-    
+
     // Today boundaries
     const startOfToday = new Date(now);
     startOfToday.setHours(0, 0, 0, 0);
     const endOfToday = new Date(now);
     endOfToday.setHours(23, 59, 59, 999);
-    
+
     console.log('🕐 [DASHBOARD] Today range:', startOfToday.toISOString(), '→', endOfToday.toISOString());
 
     // Last 7 days
@@ -218,7 +218,7 @@ module.exports.findDashboardIncomeFunction = async (shopId) => {
     throw error;
   }
 };
- 
+
 
 // module.exports.getShopIncomeStats = async (shopId) => {
 //   if (!mongoose.isValidObjectId(shopId)) {
@@ -361,13 +361,13 @@ module.exports.upcomingBooking = async (userId) => {
 
 module.exports.fetchbookingById = async (bookingId) => {
   try {
-   const bookings = await BookingModel.findById(bookingId)
-  .populate("shopId", "ShopName")        // only shopName from Shop
-  .populate("barberId", "BarberName")          // barber name (assuming 'name' field in Barber model)
-  .populate("userId", "firstName lastName") // firstName + lastName from User
-  .lean(); // optional: returns plain JS objects, easier to manipulate
-   
-  return bookings
+    const bookings = await BookingModel.findById(bookingId)
+      .populate("shopId", "ShopName")        // only shopName from Shop
+      .populate("barberId", "BarberName")          // barber name (assuming 'name' field in Barber model)
+      .populate("userId", "firstName lastName") // firstName + lastName from User
+      .lean(); // optional: returns plain JS objects, easier to manipulate
+
+    return bookings
   } catch (error) {
     console.log(error)
   }

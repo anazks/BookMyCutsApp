@@ -19,6 +19,7 @@ const setupSwagger = require('./swaggerDocs/swaggerConfig');
 const checkExpiredPremium = require('./Shops/ShopScheduler/Scheduler');
 const { seedKeralaCities } = require('./Auth/Controllers/seedCities');
 require('./Cloudinary/CloudinaryConfig')
+require('./Booking/Controler/PayoutWorker')
 
 // Define a route for the root URL
 connectToDatabase();
