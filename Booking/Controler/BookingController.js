@@ -8,6 +8,7 @@ const { trace } = require('../Router/BookingRouter');
 const crypto = require('crypto'); // CommonJS
 const BookingModel = require('../Models/BookingModel');
 const ShopModel = require('../../Shops/Model/ShopModel')
+const PayoutRequest = require('../../Shops/Model/PayoutRequest');
 
 
 
@@ -54,16 +55,19 @@ const createOrder = async (req, res) => {
       receipt: `receipt_${Date.now()}`
     };
 
-    // CHANGE THIS LINE: Use RazorPay instead of razorpayInstance
+    console.log("Creating Razorpay Order with options:", options);
+    
     const order = await RazorPay.orders.create(options);
-
+    
+    console.log("Razorpay Order Created Successfully:", order.id);
     res.status(200).json(order);
   } catch (err) {
-    console.log("FULL RAZORPAY ERROR:", JSON.stringify(err, null, 2));
-    console.error("Order Creation Error:", err);
+    console.error("RAZORPAY ORDER CREATION ERROR:", err);
     res.status(500).json({
       error: 'Order creation failed',
-      details: err.message
+      details: err.message,
+      code: err.code,
+      description: err.description
     });
   }
 }
@@ -153,7 +157,14 @@ const verifyPayment = async (req, res) => {
     } = req.body;
 
     if (!razorpay_payment_id || !razorpay_order_id || !razorpay_signature) {
-      return res.status(400).json({ success: false, message: 'Missing required fields' });
+      // If the checkout is abandoned, we need to cancel the booking to free the slot
+      if (bookingId) {
+        await BookingModel.findByIdAndUpdate(bookingId, {
+          bookingStatus: 'cancelled',
+          paymentStatus: 'unpaid'
+        });
+      }
+      return res.status(400).json({ success: false, message: 'Missing required fields or payment failed/abandoned' });
     }
 
     // Razorpay signature verification
@@ -163,11 +174,18 @@ const verifyPayment = async (req, res) => {
       .digest('hex');
 
     if (expectedSignature !== razorpay_signature) {
+      await BookingModel.findByIdAndUpdate(bookingId, {
+        bookingStatus: 'cancelled',
+        paymentStatus: 'unpaid'
+      });
       return res.status(400).json({ success: false, message: 'Invalid signature' });
     }
 
     // Update booking
     const remainingAmount = paymentType === 'full' ? 0 : Math.max((req.body.totalPrice || amount) - amount, 0);
+    const platformFee = 15;
+    const payoutAmount = Math.max(Number(amount) - platformFee, 0);
+
     const updatedBooking = await BookingModel.findByIdAndUpdate(
       bookingId,
       {
@@ -176,7 +194,8 @@ const verifyPayment = async (req, res) => {
         amountPaid: Number(amount),
         remainingAmount,
         paymentStatus: paymentType === 'full' ? 'paid' : 'partial',
-        bookingStatus: 'confirmed'
+        bookingStatus: 'confirmed',
+        salonPayoutAmount: payoutAmount
       },
       { new: true, lean: true }
     );
@@ -185,27 +204,41 @@ const verifyPayment = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Booking not found' });
     }
 
-    // --- TRIGGER QUEUE START ---
-    // We trigger the payout queue only if money was actually received
+    // --- CREATE PAYOUT RECORD (Unified: Haircut Earning) ---
     try {
-      await payoutQueue.add(
-        'process-live-payout',
-        {
-          bookingId: updatedBooking._id,
-          shopOwnerId: updatedBooking.shopOwnerId,
-          amount: updatedBooking.amountPaid || Number(amount)
-        },
-        {
-          jobId: updatedBooking._id.toString(), // Prevents duplicate jobs!
-          attempts: 3,
-          backoff: { type: 'exponential', delay: 2000 }
-        }
-      );
-      console.log(`[Queue] Payout job queued for Booking: ${bookingId}`);
-    } catch (queueError) {
-      // We don't want to fail the whole response if only the queue fails
-      console.error('Queue Trigger Error:', queueError);
+        // As per user: "if 100 is haircut charge, platform fee is 15, shop owner gets 85"
+        // We do NOT add 5 on top. The 5 is part of the 85 for reporting purposes.
+        await PayoutRequest.create({
+            shopOwnerId: updatedBooking.shopOwnerId,
+            amount: payoutAmount,
+            bookingIds: [updatedBooking._id],
+            status: 'pending',
+            type: 'earning'
+        });
+        console.log(`[Payout] Created PayoutRequest for Booking: ${bookingId} (Amount: ${payoutAmount})`);
+    } catch (payoutError) {
+        console.error('Payout Record Creation Error:', payoutError);
     }
+    // We trigger the payout queue only if money was actually received
+    // try {
+    //   await payoutQueue.add(
+    //     'process-live-payout',
+    //     {
+    //       bookingId: updatedBooking._id,
+    //       shopOwnerId: updatedBooking.shopOwnerId,
+    //       amount: updatedBooking.amountPaid || Number(amount)
+    //     },
+    //     {
+    //       jobId: updatedBooking._id.toString(), // Prevents duplicate jobs!
+    //       attempts: 3,
+    //       backoff: { type: 'exponential', delay: 2000 }
+    //     }
+    //   );
+    //   console.log(`[Queue] Payout job queued for Booking: ${bookingId}`);
+    // } catch (queueError) {
+    //   // We don't want to fail the whole response if only the queue fails
+    //   console.error('Queue Trigger Error:', queueError);
+    // }
     // --- TRIGGER QUEUE END ---
 
     // Send confirmation email asynchronously
@@ -213,16 +246,16 @@ const verifyPayment = async (req, res) => {
       .then(() => console.log('Email sent'))
       .catch(err => console.error('Email error:', err));
 
-    try {
-      await payoutQueue.add('initiatePayout', {
-        bookingId: bookingId,
-        shopOwnerId: updatedBooking.shopOwnerId,
-        amount: updatedBooking.amountPaid || Number(amount)
-      });
-      console.log(`Successfully enqueued payout for booking ${bookingId}`);
-    } catch (queueErr) {
-      console.error('Failed to add to payout queue:', queueErr);
-    }
+    // try {
+    //   await payoutQueue.add('initiatePayout', {
+    //     bookingId: bookingId,
+    //     shopOwnerId: updatedBooking.shopOwnerId,
+    //     amount: updatedBooking.amountPaid || Number(amount)
+    //   });
+    //   console.log(`Successfully enqueued payout for booking ${bookingId}`);
+    // } catch (queueErr) {
+    //   console.error('Failed to add to payout queue:', queueErr);
+    // }
 
     // Respond immediately
     return res.status(200).json({
@@ -651,6 +684,35 @@ const getbookings = async (req, res) => {
 
 
 
-module.exports = { getbookings, findShopByService, fetchUpComeingBooking, checkAvailability, AddBooking, getMybooking, createOrder, findDashboardIncome, verifyPayment, barberFreeSlots, fetchAllAvailableTimeSlots, fetchAllbookings }
+const completeBooking = async (req, res) => {
+  try {
+    const { bookingId } = req.body;
+
+    if (!bookingId) {
+      return res.status(400).json({ success: false, message: "Booking ID is required" });
+    }
+
+    const updatedBooking = await BookingModel.findByIdAndUpdate(
+      bookingId,
+      { bookingStatus: 'completed' },
+      { new: true }
+    );
+
+    if (!updatedBooking) {
+      return res.status(404).json({ success: false, message: "Booking not found" });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Booking marked as complete",
+      booking: updatedBooking
+    });
+  } catch (error) {
+    console.error("Error in completeBooking:", error);
+    return res.status(500).json({ success: false, message: "Internal server error" });
+  }
+};
+
+module.exports = { completeBooking, getbookings, findShopByService, fetchUpComeingBooking, checkAvailability, AddBooking, getMybooking, createOrder, findDashboardIncome, verifyPayment, barberFreeSlots, fetchAllAvailableTimeSlots, fetchAllbookings }
 
 

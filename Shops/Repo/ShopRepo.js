@@ -172,16 +172,16 @@ module.exports.getAllBookingsOfShop = async (
     const startOfToday = new Date();
     startOfToday.setHours(0, 0, 0, 0);
 
-    // 2️⃣ Fetch bookings with pagination
-    const [bookings, total] = await Promise.all([
+    // 2️⃣ Fetch bookings with pagination and 3️⃣ statistics
+    const [bookings, upcomingTotal, stats] = await Promise.all([
       BookingModel.find({ 
         shopId: { $in: shopIds },
-        "timeSlot.startingTime": { $gte: startOfToday } // Filter for today and future 
+        "timeSlot.startingTime": { $gte: startOfToday } 
       })
         .populate("userId", "firstName")
         .populate("barberId", "BarberName")
         .populate("shopId", "shopName")
-        .sort({ "timeSlot.startingTime": 1 }) // Sort ascending: nearest upcoming booking first
+        .sort({ "timeSlot.startingTime": 1 })
         .skip(skip)
         .limit(limit)
         .lean(),
@@ -189,10 +189,21 @@ module.exports.getAllBookingsOfShop = async (
       BookingModel.countDocuments({ 
         shopId: { $in: shopIds },
         "timeSlot.startingTime": { $gte: startOfToday }
-      })
+      }),
+
+      // Statistics across ALL time for these shops
+      (async () => {
+        const [total, completed, confirmed, pending] = await Promise.all([
+          BookingModel.countDocuments({ shopId: { $in: shopIds } }),
+          BookingModel.countDocuments({ shopId: { $in: shopIds }, bookingStatus: 'completed' }),
+          BookingModel.countDocuments({ shopId: { $in: shopIds }, bookingStatus: 'confirmed' }),
+          BookingModel.countDocuments({ shopId: { $in: shopIds }, bookingStatus: 'pending' })
+        ]);
+        return { total, completed, confirmed, pending };
+      })()
     ]);
 
-    return { bookings, total };
+    return { bookings, total: upcomingTotal, stats };
 
   } catch (error) {
     console.error("Error in getAllBookingsOfShop:", error);

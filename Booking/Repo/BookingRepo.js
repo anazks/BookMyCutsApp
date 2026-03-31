@@ -331,6 +331,7 @@ module.exports.updateBooking = async ({
     booking.paymentStatus =
       paymentType === 'full' ? 'paid' : 'partial';
     booking.bookingStatus = 'confirmed';
+    booking.salonPayoutAmount = Math.max(amountPaid - 15, 0);
 
     await booking.save();
 

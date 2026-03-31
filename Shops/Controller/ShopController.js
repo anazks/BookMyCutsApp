@@ -1,12 +1,13 @@
 const asyncHandler = require("express-async-handler");
 const jwt = require('jsonwebtoken');
-const  SaveProfileToCloud  = require('../CloudStorageCurds/SaveProfileToCloude')
-const {modifyShop, fetchShop,fetchBarberseByShopId,fetchServiceByShopId,fetchBarbersByShopId,LocationAndNameOfOwner} = require('../Repo/ShopRepo')
+const SaveProfileToCloud = require('../CloudStorageCurds/SaveProfileToCloude')
+const { modifyShop, fetchShop, fetchBarberseByShopId, fetchServiceByShopId, fetchBarbersByShopId, LocationAndNameOfOwner } = require('../Repo/ShopRepo')
 const secretkey = process.env.secretKey;
 const ServiceModel = require('../Model/ServiceModel')
 const BarbarModel = require('../Model/BarbarModel')
 const mongoose = require('mongoose');
-
+const razorpay = require('../../Razorpay/RazorpayConfig');
+const crypto = require('crypto');
 
 const {
     updateBankDetailsFunction,
@@ -42,7 +43,7 @@ const {
 } = require('../Repo/ShopRepo');
 const Decoder = require("../../TokenDecoder/Decoder");
 const { json } = require("express");
-const { convertToGeocode,findNearestShops } = require('../UseCase/useCaseShop');
+const { convertToGeocode, findNearestShops } = require('../UseCase/useCaseShop');
 const { TrunkContextImpl } = require("twilio/lib/rest/routes/v2/trunk");
 const ShopModel = require("../Model/ShopModel");
 const BookingModel = require("../../Booking/Models/BookingModel");
@@ -50,18 +51,18 @@ const { error } = require("ajv/dist/vocabularies/applicator/dependencies");
 
 
 const updateShopActiveStatus = async (shopId) => {
-  if (!shopId) {
-    throw new Error("shopId is required");
-  }
+    if (!shopId) {
+        throw new Error("shopId is required");
+    }
 
-  const barberCount = await BarbarModel.countDocuments({ shopId });
-  const isActive = barberCount > 0;
+    const barberCount = await BarbarModel.countDocuments({ shopId });
+    const isActive = barberCount > 0;
 
-  await ShopModel.findByIdAndUpdate(shopId, {
-    isActive
-  });
+    await ShopModel.findByIdAndUpdate(shopId, {
+        isActive
+    });
 
-  return isActive;
+    return isActive;
 };
 
 
@@ -103,11 +104,11 @@ const AddShop = asyncHandler(async (req, res) => {
         data.ExactLocationCoord = {
             type: "Point",
             coordinates: [
-                (geocode?.success && !isNaN(Number(geocode.longitude)) 
-                    ? Number(geocode.longitude) 
+                (geocode?.success && !isNaN(Number(geocode.longitude))
+                    ? Number(geocode.longitude)
                     : fallbackLng),
-                (geocode?.success && !isNaN(Number(geocode.latitude)) 
-                    ? Number(geocode.latitude) 
+                (geocode?.success && !isNaN(Number(geocode.latitude))
+                    ? Number(geocode.latitude)
                     : fallbackLat)
             ]
         };
@@ -173,7 +174,7 @@ const ViewAllShop = asyncHandler(async (req, res) => {
 
 const addService = asyncHandler(async (req, res) => {
     const data = req.body;
-    console.log('duration',data)
+    console.log('duration', data)
     if (!data) {
         return res.status(400).json({
             success: false,
@@ -246,8 +247,8 @@ const ViewAllServices = asyncHandler(async (req, res) => {
 const addBarber = asyncHandler(async (req, res) => {
     const data = req.body;
     const { shopId } = data
-    console.log(shopId,"SHOPID -------------------")
-    console.log("addBarber requesting data:",data)
+    console.log(shopId, "SHOPID -------------------")
+    console.log("addBarber requesting data:", data)
 
     if (!data) {
         return res.status(400).json({
@@ -267,12 +268,12 @@ const addBarber = asyncHandler(async (req, res) => {
     try {
         const decoded = jwt.verify(token, secretkey);
         data.shoperId = decoded.id;
-        
+
 
         const addedBarber = await addBarbers(data);
-        console.log("ADDED BARBER:",addedBarber)
+        console.log("ADDED BARBER:", addedBarber)
         const isActive = await updateShopActiveStatus(shopId)
-        console.log("isActive",isActive)
+        console.log("isActive", isActive)
         if (addedBarber) {
             return res.status(201).json({
                 success: true,
@@ -305,7 +306,7 @@ const ViewAllBarbers = asyncHandler(async (req, res) => {
         const page = parseInt(req.query.page) || 1;
         const limit = parseInt(req.query.limit) || 10;
         const skip = (page - 1) * limit;
-        
+
         // Get optional search parameters
         const search = req.query.search || '';
         const location = req.query.location || '';
@@ -394,14 +395,14 @@ const viewMyService = asyncHandler(async (req, res) => {
     try {
         const tokenData = await Decoder(token);
         const myServices = await getMyService(tokenData.id);
-        
+
         if (!myServices || myServices.length === 0) {
             return res.status(404).json({
                 success: false,
                 message: "No services found for this shop"
             });
         }
-        
+
         return res.status(200).json({
             success: true,
             message: "Services retrieved successfully",
@@ -418,7 +419,7 @@ const viewMyService = asyncHandler(async (req, res) => {
 
 const viewMyBarbers = asyncHandler(async (req, res) => {
     const token = req.headers['authorization']?.split(' ')[1];
-    console.log(token,"token")
+    console.log(token, "token")
     if (!token) {
         return res.status(401).json({
             success: false,
@@ -444,38 +445,39 @@ const viewMyBarbers = asyncHandler(async (req, res) => {
 });
 
 const viewAllBookingOfShops = asyncHandler(async (req, res) => {
-  try {
-    const token = req.headers['authorization']?.split(' ')[1];
-    const tokenData = await Decoder(token);
+    try {
+        const token = req.headers['authorization']?.split(' ')[1];
+        const tokenData = await Decoder(token);
 
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 10;
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 10;
 
-    const { bookings, total } = await getAllBookingsOfShop(
-      tokenData.id,
-      page,
-      limit
-    );
+        const { bookings, total, stats } = await getAllBookingsOfShop(
+            tokenData.id,
+            page,
+            limit
+        );
 
-    return res.status(200).json({
-      success: true,
-      message: "Bookings retrieved successfully",
-      pagination: {
-        total,
-        page,
-        limit,
-        totalPages: Math.ceil(total / limit)
-      },
-      data: bookings
-    });
+        return res.status(200).json({
+            success: true,
+            message: "Bookings retrieved successfully",
+            pagination: {
+                total,
+                page,
+                limit,
+                totalPages: Math.ceil(total / limit)
+            },
+            stats,
+            data: bookings
+        });
 
-  } catch (error) {
-    console.error("Error fetching bookings:", error);
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error"
-    });
-  }
+    } catch (error) {
+        console.error("Error fetching bookings:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Internal server error"
+        });
+    }
 });
 
 
@@ -491,14 +493,14 @@ const myprofile = asyncHandler(async (req, res) => {
     try {
         const tokenData = await Decoder(token);
         const shopData = await getShopUser(tokenData.id);
-        
+
         if (!shopData) {
             return res.status(404).json({
                 success: false,
                 message: "Shop profile not found"
             });
         }
-        
+
         return res.status(200).json({
             success: true,
             message: "Profile retrieved successfully",
@@ -512,7 +514,7 @@ const myprofile = asyncHandler(async (req, res) => {
         });
     }
 });
-const   viewMyshop = asyncHandler(async (req, res) => {
+const viewMyshop = asyncHandler(async (req, res) => {
     const token = req.headers['authorization']?.split(' ')[1];
     if (!token) {
         return res.status(401).json({
@@ -524,14 +526,14 @@ const   viewMyshop = asyncHandler(async (req, res) => {
     try {
         const tokenData = await Decoder(token);
         const myShop = await getMyshop(tokenData.id);
-            console.log("My shop data:--------", myShop);
+        console.log("My shop data:--------", myShop);
         if (!myShop) {
             return res.status(404).json({
                 success: false,
                 message: "My shop not found"
             });
         }
-        
+
         return res.status(200).json({
             success: true,
             message: "My shop retrieved successfully",
@@ -562,7 +564,7 @@ const viewSingleShopService = asyncHandler(async (req, res) => {
         //         message: "No services found for this shop"
         //     });
         // }
-        
+
         return res.status(200).json({
             success: true,
             message: "Services retrieved successfully",
@@ -593,7 +595,7 @@ const viewSingleShopBarbers = asyncHandler(async (req, res) => {
         //         message: "No barbers found for this shop"
         //     });
         // }
-        
+
         return res.status(200).json({
             success: true,
             message: "Barbers retrieved successfully",
@@ -608,21 +610,21 @@ const viewSingleShopBarbers = asyncHandler(async (req, res) => {
     }
 });
 
-const updateBarber = async (req,res) => {
+const updateBarber = async (req, res) => {
     try {
         const barberId = req.params.id
         let data = req.body
-        const barber = await editBarberProfile(barberId,data)
+        const barber = await editBarberProfile(barberId, data)
         await updateShopActiveStatus
-        console.log("edited document:",barber)
-        if(!barber || barber.lenght === 0){
-             return res.status(404).json({
+        console.log("edited document:", barber)
+        if (!barber || barber.lenght === 0) {
+            return res.status(404).json({
                 success: false,
                 message: "barber not found"
             });
         }
 
-          return res.status(200).json({
+        return res.status(200).json({
             success: true,
             message: "successfully updated barber",
             data: barber
@@ -631,278 +633,312 @@ const updateBarber = async (req,res) => {
         console.error(error)
         return res.status(500).json({
             success: false,
-            message:"internal server error"
+            message: "internal server error"
         })
     }
 }
 
 const deleteBarber = async (req, res) => {
-  try {
-    const barberId = req.params.id
-    const shopId = req.params.shopId
-    const barber = await deleteBarberFunction(barberId)
-    const isActive =  await updateShopActiveStatus(shopId)
-    console.log("isActive",isActive)
-
-    if (!barber) {
-      // nothing was deleted because document not found
-      return res.status(404).json({
-        success: false,
-        message: 'Barber not found'
-      })
-    }
-
-    // deletion successful — return the deleted document or a success message
-    return res.status(200).json({
-      success: true,
-      message: 'Barber successfully deleted',
-      data: barber
-    })
-  } catch (error) {
-    console.error(error)
-    return res.status(500).json({
-      success: false,
-      message: 'Internal server error'
-    })
-  }
-}
-
-
-const makePremium =  async (req,res) => {
     try {
-        const {shopId} = req.body
-        const premium = await makePremiumFunction(shopId)
-        if(!premium || premium.length === 0){
+        const barberId = req.params.id
+        const shopId = req.params.shopId
+        const barber = await deleteBarberFunction(barberId)
+        const isActive = await updateShopActiveStatus(shopId)
+        console.log("isActive", isActive)
+
+        if (!barber) {
+            // nothing was deleted because document not found
             return res.status(404).json({
-                succuss:true,
-                message:"premium subscirption is failed"
-            })
-        }else{
-            return res.status(200).json({
-                success:true,
-                message:"successfully subscribed to premium",
-                premium
+                success: false,
+                message: 'Barber not found'
             })
         }
+
+        // deletion successful — return the deleted document or a success message
+        return res.status(200).json({
+            success: true,
+            message: 'Barber successfully deleted',
+            data: barber
+        })
     } catch (error) {
-            console.error(error)
-            return res.status(500).json({
-                success:false,
-                message:"internal server error"
-            })
+        console.error(error)
+        return res.status(500).json({
+            success: false,
+            message: 'Internal server error'
+        })
     }
 }
 
-const getAllPremiumShops = async (req,res) => {
+
+const createPremiumOrder = async (req, res) => {
+    try {
+        const { shopId } = req.body;
+        if (!shopId) {
+            return res.status(400).json({ success: false, message: "Shop ID is required" });
+        }
+
+        const premiumPriceInPaise = 10 * 100; // Rs 500
+
+        const order = await razorpay.orders.create({
+            amount: premiumPriceInPaise,
+            currency: 'INR',
+            receipt: `premium_${shopId}`
+        });
+
+        return res.status(200).json({ success: true, order });
+    } catch (error) {
+        console.error("Premium Order Error:", error);
+        return res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+const verifyPremiumAndUpgrade = async (req, res) => {
+    try {
+        const { shopId, razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body;
+
+        if (!shopId || !razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
+            return res.status(400).json({ success: false, message: "Missing required payment fields!" });
+        }
+
+        // Verify the payment
+        const expectedSignature = crypto
+            .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET)
+            .update(`${razorpay_order_id}|${razorpay_payment_id}`)
+            .digest('hex');
+
+        if (expectedSignature !== razorpay_signature) {
+            return res.status(400).json({ success: false, message: "Invalid Payment Signature!" });
+        }
+
+        // Call the repo function to actually upgrade the DB
+        const premium = await makePremiumFunction(shopId);
+
+        if (!premium) {
+            return res.status(404).json({ success: false, message: "Premium subscription failed to update DB" });
+        }
+
+        return res.status(200).json({
+            success: true,
+            message: "Shop upgraded to Premium successfully!",
+            premium
+        });
+
+    } catch (error) {
+        console.error("Premium Verify Error:", error);
+        return res.status(500).json({ success: false, message: "Internal Server Error" });
+    }
+}
+
+const getAllPremiumShops = async (req, res) => {
     try {
         let premiumShops = await getAllPremiumShopsFunction()
-        if(!premiumShops){
+        if (!premiumShops) {
             return res.status(404).json({
-                success:false,
-                message:"get all premium shops is faied"
+                success: false,
+                message: "get all premium shops is faied"
             })
-        }else{
+        } else {
             return res.status(200).json({
-                success:true,
-                message:"successfully get all premium shops",
+                success: true,
+                message: "successfully get all premium shops",
                 premiumShops
             })
         }
     } catch (error) {
         console.error(error)
-         return res.status(500).json({
-                success:false,
-                message:"internal server error"
-            })
+        return res.status(500).json({
+            success: false,
+            message: "internal server error"
+        })
     }
 }
 
 const saveBankDetails = async (req, res) => {
-  try {
-    // 1. Get token
-    const token = req.headers['authorization']?.split(' ')[1];
+    try {
+        // 1. Get token
+        const token = req.headers['authorization']?.split(' ')[1];
 
-    if (!token) {
-      return res.status(401).json({
-        success: false,
-        message: "Token required"
-      });
+        if (!token) {
+            return res.status(401).json({
+                success: false,
+                message: "Token required"
+            });
+        }
+
+        // 2. Decode token
+        const tokenData = await Decoder(token);
+        console.log("token data in controller =====", tokenData);
+
+        const shoperId = tokenData.id;
+        console.log("shoperId------------", shoperId);
+
+        // 3. Create data object (do NOT mutate req.body)
+        const data = {
+            ...req.body,
+            ShoperId: shoperId   // 🔴 match schema field name
+        };
+
+        // 4. Save bank details
+        const bankDetails = await saveBankDetailsFunction(data);
+
+        if (!bankDetails) {
+            return res.status(400).json({
+                success: false,
+                message: "Failed to save bank details"
+            });
+        }
+
+        // 5. Success response
+        return res.status(200).json({
+            success: true,
+            message: "Successfully saved bank details",
+            bankDetails
+        });
+
+    } catch (error) {
+        console.error("saveBankDetails error:", error);
+
+        return res.status(500).json({
+            success: false,
+            message: "Internal server error"
+        });
     }
-
-    // 2. Decode token
-    const tokenData = await Decoder(token);
-    console.log("token data in controller =====", tokenData);
-
-    const shoperId = tokenData.id;
-    console.log("shoperId------------", shoperId);
-
-    // 3. Create data object (do NOT mutate req.body)
-    const data = {
-      ...req.body,
-      ShoperId: shoperId   // 🔴 match schema field name
-    };
-
-    // 4. Save bank details
-    const bankDetails = await saveBankDetailsFunction(data);
-
-    if (!bankDetails) {
-      return res.status(400).json({
-        success: false,
-        message: "Failed to save bank details"
-      });
-    }
-
-    // 5. Success response
-    return res.status(200).json({
-      success: true,
-      message: "Successfully saved bank details",
-      bankDetails
-    });
-
-  } catch (error) {
-    console.error("saveBankDetails error:", error);
-
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error"
-    });
-  }
 };
 
 
-const viewbankDetails = async (req,res) => {
+const viewbankDetails = async (req, res) => {
     try {
-          const token = req.headers['authorization']?.split(' ')[1];
-        if(!token){
+        const token = req.headers['authorization']?.split(' ')[1];
+        if (!token) {
             res.status(404).json({
-                success:false,
-                message:"token required"
+                success: false,
+                message: "token required"
             })
         }
         const tokenData = await Decoder(token);
         console.log(tokenData)
         const shoperId = tokenData.id
-       const bankDetails = await viewbankDetailsFunction(shoperId) 
-       console.log("Bank details",bankDetails)
-       if(!bankDetails){
-          return res.status(404).json({
-                success:true,
-                message:"fetching bank details is failed",
-          })
-       }else{
-          return res.status(200).json({
-                success:true,
-                message:"successfully fetched bank details",
+        const bankDetails = await viewbankDetailsFunction(shoperId)
+        console.log("Bank details", bankDetails)
+        if (!bankDetails) {
+            return res.status(404).json({
+                success: true,
+                message: "fetching bank details is failed",
+            })
+        } else {
+            return res.status(200).json({
+                success: true,
+                message: "successfully fetched bank details",
                 bankDetails
-          })
-       }
+            })
+        }
     } catch (error) {
         console.error(error)
         return res.status(500).json({
-            success:false,
-            message:"internal server error"
+            success: false,
+            message: "internal server error"
         })
     }
 }
 
-const deleteBankDetails = async (req,res) => {
+const deleteBankDetails = async (req, res) => {
     try {
         const shoperId = req.params.id
         const bankDetails = await deleteBankdetailsFunction(shoperId)
-        if(!bankDetails || bankdetails.lenght === 0){
+        if (!bankDetails || bankdetails.lenght === 0) {
             return res.status(200).json({
-                success:true,
-                message:"successfully deleted the bank details"
+                success: true,
+                message: "successfully deleted the bank details"
             })
-        }else{
+        } else {
             return res.status(404).json({
-                success:false,
-                message:"deletion failed"
+                success: false,
+                message: "deletion failed"
             })
         }
     }
     catch (error) {
-       console.error(error) 
-       return res.status(500).json({
-            success:false,
-            message:"internal server error"
-       })
+        console.error(error)
+        return res.status(500).json({
+            success: false,
+            message: "internal server error"
+        })
     }
 }
 
-const upadateBankdetails = async (req,res) => {
+const upadateBankdetails = async (req, res) => {
     try {
         const shoperId = req.params.id
         const data = req.body
-        const bankDetails = await updateBankDetailsFunction(shoperId,data)
-        if(bankDetails){
+        const bankDetails = await updateBankDetailsFunction(shoperId, data)
+        if (bankDetails) {
             return res.status(200).json({
-                success:true,
-                message:"successfully updated bank details",
+                success: true,
+                message: "successfully updated bank details",
                 bankDetails
             })
-        }else{
+        } else {
             return res.status(404).json({
-                success:false,
-                message:"failed to update the bank details"
+                success: false,
+                message: "failed to update the bank details"
             })
-        }  
-        } catch (error) {
+        }
+    } catch (error) {
         console.error(erro)
         return res.status(500).json({
-            success:failed,
-            message:"interal server error"
+            success: failed,
+            message: "interal server error"
         })
     }
 }
 
-const editService = async (req,res) => {
+const editService = async (req, res) => {
     try {
-      const serviceId = req.params.id 
-      console.log("serviceId",serviceId) 
-      const data = req.body
-      let service = await editServiceFunction(serviceId,data)
-      if(!service || service.length === 0 ){
-        res.status(404).json({
-            success:false,
-            message:"failed to updata service",
-        })
-      }else{
-        res.status(200).json({
-            success:true,
-            message:"successfully edited service",
-            service
-        })
-      }
+        const serviceId = req.params.id
+        console.log("serviceId", serviceId)
+        const data = req.body
+        let service = await editServiceFunction(serviceId, data)
+        if (!service || service.length === 0) {
+            res.status(404).json({
+                success: false,
+                message: "failed to updata service",
+            })
+        } else {
+            res.status(200).json({
+                success: true,
+                message: "successfully edited service",
+                service
+            })
+        }
     } catch (error) {
         res.status(500).json({
-            success:false,
-            message:"internal server error"
+            success: false,
+            message: "internal server error"
         })
         console.error(error)
     }
 }
 
- const deleteService = async (req,res) => {
-   try {
-    const serviceId = req.params.id
-    let service = deleteServiceFunction(serviceId)
-    if(!service){
-        res.status(404).json({
-            success:false,
-            message:"failed deleted  service",
-            
+const deleteService = async (req, res) => {
+    try {
+        const serviceId = req.params.id
+        let service = deleteServiceFunction(serviceId)
+        if (!service) {
+            res.status(404).json({
+                success: false,
+                message: "failed deleted  service",
+
+            })
+        }
+        res.status(200).json({
+            success: true,
+            message: "successfully deleted sevice",
+            service
         })
-    }
-    res.status(200).json({
-        success:true,
-        message:"successfully deleted sevice",
-        service
-    })
-   } catch (error) {
+    } catch (error) {
         console.log(error)
-   }
- }
+    }
+}
 
 const findNearByShops = async (req, res) => {
     try {
@@ -960,47 +996,47 @@ const findNearByShops = async (req, res) => {
     }
 };
 
-const deleteShop = async (req,res) => {
+const deleteShop = async (req, res) => {
     try {
         const shopId = req.params.id
         const shop = await deleteShopFuntion(shopId)
-        if(shop){
-          return  res.status(200).json({
-                success:true,
-                message:"successfully deleted the shop",
+        if (shop) {
+            return res.status(200).json({
+                success: true,
+                message: "successfully deleted the shop",
 
             })
         }
-          return  res.status(404).json({
-            success:false,
-            message:"failed to delete shop",
+        return res.status(404).json({
+            success: false,
+            message: "failed to delete shop",
 
         })
     } catch (error) {
         console.error(error)
-      return  res.status(500).json({
-            success:false,
-            message:"internal server erroo"
+        return res.status(500).json({
+            success: false,
+            message: "internal server erroo"
         })
     }
 }
 
-const addProfileImage = async (req,res) => {
+const addProfileImage = async (req, res) => {
     try {
-        const shopId  = req.params.id
-        const media = req.file 
-        if(!shopId){
-            res.status(404).json({error:"shopId is required"})
+        const shopId = req.params.id
+        const media = req.file
+        if (!shopId) {
+            res.status(404).json({ error: "shopId is required" })
         }
-        if(!media){
-            res.status(404).json({error:"no image uploaded"})
+        if (!media) {
+            res.status(404).json({ error: "no image uploaded" })
         }
-        const result = await SaveProfileToCloud(media,shopId)
+        const result = await SaveProfileToCloud(media, shopId)
         res.status(200).json({
-            success:true,
+            success: true,
             result
         })
-        
+
     } catch (error) {
         res.status(500).json({
             error: "internal server error"
@@ -1009,79 +1045,79 @@ const addProfileImage = async (req,res) => {
     }
 }
 
-const deleteMedia = async (req,res) => {
+const deleteMedia = async (req, res) => {
     try {
         const id = req.params.id
         const result = await deleteMediaFile(id)
-        if(result){
-           return res.status(200).json({
-                success:true,
-                message:"successfully deleted the file"
+        if (result) {
+            return res.status(200).json({
+                success: true,
+                message: "successfully deleted the file"
             })
         }
         return res.status(404).json({
-            success:false,
-            message:"failed to delete the file"
+            success: false,
+            message: "failed to delete the file"
         })
     } catch (error) {
-        console.log("Error in deleting file",error)
-       return res.status(500).json({
-            success:false,
-            message:"internal server error"
+        console.log("Error in deleting file", error)
+        return res.status(500).json({
+            success: false,
+            message: "internal server error"
         })
     }
 }
 
 const updateMediaDetails = async (req, res) => {
-  try {
-    const { mediaId } = req.params;
-    const { title, description } = req.body;
+    try {
+        const { mediaId } = req.params;
+        const { title, description } = req.body;
 
-    if (!title || !description) {
-      return res.status(400).json({
-        success: false,
-        message: "Both title and description are required",
-      });
+        if (!title || !description) {
+            return res.status(400).json({
+                success: false,
+                message: "Both title and description are required",
+            });
+        }
+
+        const result = await updateMediaDetailsFunction(mediaId, title, description);
+
+        if (!result || result.matchedCount === 0) {
+            return res.status(404).json({
+                success: false,
+                message: "Media not found",
+            });
+        }
+
+        return res.status(200).json({
+            success: true,
+            message: "Media updated successfully",
+            result,
+        });
+    } catch (error) {
+        console.error("Error updating media:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Server error",
+            error: error.message,
+        });
     }
-
-    const result = await updateMediaDetailsFunction(mediaId, title, description);
-
-    if (!result || result.matchedCount === 0) {
-      return res.status(404).json({
-        success: false,
-        message: "Media not found",
-      });
-    }
-
-    return res.status(200).json({
-      success: true,
-      message: "Media updated successfully",
-      result,
-    });
-  } catch (error) {
-    console.error("Error updating media:", error);
-    return res.status(500).json({
-      success: false,
-      message: "Server error",
-      error: error.message,
-    });
-  }
 };
 
 
 async function geocodeTextToCoords(text) {
-  const res = await fetch(
-    `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(text)}&format=json&limit=1`
-  );
+    const res = await fetch(
+        `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(text)}&format=json&limit=1`
+    );
 
-  const data = await res.json();
-  if (!data.length) return null;
+    const data = await res.json();
+    if (!data.length) return null;
 
-  return {
-    lat: parseFloat(data[0].lat),
-    lng: parseFloat(data[0].lon),
-    place: data[0].display_name
-  };
+    return {
+        lat: parseFloat(data[0].lat),
+        lng: parseFloat(data[0].lon),
+        place: data[0].display_name
+    };
 }
 
 const search = async (req, res) => {
@@ -1100,8 +1136,8 @@ const search = async (req, res) => {
         if (shops.length === 0) {
             console.log("entered in location search")
             const coords = await geocodeTextToCoords(q);
-            console.log("COORDS",coords)
-            
+            console.log("COORDS", coords)
+
             if (coords) {
                 const { lat, lng } = coords;
                 // Overwrite the 'shops' variable with the nearby results
@@ -1112,7 +1148,7 @@ const search = async (req, res) => {
                                 type: "Point",
                                 coordinates: [lng, lat]
                             },
-                            $maxDistance: 10000 
+                            $maxDistance: 10000
                         }
                     }
                 });
@@ -1143,354 +1179,354 @@ const search = async (req, res) => {
     }
 }
 
-const fetchAllUniqueService = async (req,res) => {
-  try {
-    const service = await getUniqueService()
-    if(service){
-        res.status(200).json({
-            success:true,
-            message:"successfull fetch service",
-            service
-        })
-    }else{
-        res.status(404).json({
-            success:true,
-            message:"failed to fetch service"
-        })
+const fetchAllUniqueService = async (req, res) => {
+    try {
+        const service = await getUniqueService()
+        if (service) {
+            res.status(200).json({
+                success: true,
+                message: "successfull fetch service",
+                service
+            })
+        } else {
+            res.status(404).json({
+                success: true,
+                message: "failed to fetch service"
+            })
+        }
+    } catch (error) {
+        console.log(error)
     }
-  } catch (error) {
-    console.log(error)
-  }
 }
 
 const filterShopsByService = async (req, res) => {
-  try {
-    console.log(req.body)
-    const { shopIds, serviceName } = req.body;
+    try {
+        console.log(req.body)
+        const { shopIds, serviceName } = req.body;
 
-    if (!shopIds?.length || !serviceName) {
-      return res.status(400).json({
-        success: false,
-        message: "shopIds and serviceName are required"
-      });
+        if (!shopIds?.length || !serviceName) {
+            return res.status(400).json({
+                success: false,
+                message: "shopIds and serviceName are required"
+            });
+        }
+
+        const shops = await filterShopsByServiceFunction(shopIds, serviceName);
+
+        return res.status(200).json({
+            success: true,
+            count: shops.length,
+            shops
+        });
+
+    } catch (error) {
+        console.error("filterShopsByService error:", error);
+        res.status(500).json({
+            success: false,
+            message: "Server error"
+        });
     }
-
-    const shops = await filterShopsByServiceFunction(shopIds, serviceName);
-
-    return res.status(200).json({
-      success: true,
-      count: shops.length,
-      shops
-    });
-
-  } catch (error) {
-    console.error("filterShopsByService error:", error);
-    res.status(500).json({
-      success: false,
-      message: "Server error"
-    });
-  }
 };
 
-const viewAllService = async (req,res) => {
-  try {
-     const service = await ServiceModel.find({})
-     res.json(service)
-  } catch (error) {
-    console.log(error)
-  }
+const viewAllService = async (req, res) => {
+    try {
+        const service = await ServiceModel.find({})
+        res.json(service)
+    } catch (error) {
+        console.log(error)
+    }
 }
 
-const editShop = async (req,res) => {
+const editShop = async (req, res) => {
     try {
         const shopId = req.params.id
         const data = req.body
-        const shop = await modifyShop(shopId,data)
-        if(shop){
+        const shop = await modifyShop(shopId, data)
+        if (shop) {
             res.status(200).json({
-                success:true,
-                message:"successfully updated the shop",
+                success: true,
+                message: "successfully updated the shop",
                 shop
             })
-        }else{
+        } else {
             res.status(404).json({
-                success:false,
-                message:"failed to updated shop"
+                success: false,
+                message: "failed to updated shop"
             })
         }
     } catch (error) {
         console.log(error)
         res.status(500).json({
-            success:false,
-            message:"internal server error"
+            success: false,
+            message: "internal server error"
         })
     }
 }
 
-const getShop = async (req,res) => {
+const getShop = async (req, res) => {
     try {
         const shopId = req.params.id
 
         const shop = await fetchShop(shopId)
 
-        if(shop){
+        if (shop) {
             res.status(200).json({
-                success:true,
-                message:"successfully fetch the shop",
+                success: true,
+                message: "successfully fetch the shop",
                 shop
             })
-        }else{
+        } else {
             res.status(404).json({
-                success:false,
-                message:"failed to fetch shop"
+                success: false,
+                message: "failed to fetch shop"
             })
         }
     } catch (error) {
         console.log(error)
         res.status(500).json({
-            success:false,
-            message:"internal server error"
+            success: false,
+            message: "internal server error"
         })
     }
 }
 
 const fetchBookingsByShop = async (req, res) => {
-  try {
-    const page = Number(req.query.page) || 1;
-    const limit = Number(req.query.limit) || 10;
-    const skip = (page - 1) * limit;
+    try {
+        const page = Number(req.query.page) || 1;
+        const limit = Number(req.query.limit) || 10;
+        const skip = (page - 1) * limit;
 
-    const { shopId } = req.params;
+        const { shopId } = req.params;
 
-    if (!shopId) {
-      return res.status(400).json({
-        success: false,
-        message: "shopId parameter is required in the URL",
-      });
-    }
-
-    console.log(`[fetchBookingsByShop] shopId received: ${shopId} (type: ${typeof shopId})`);
-
-    const {
-      date,
-      startDate,
-      endDate,
-      period,
-      bookingStatus,
-      paymentStatus,
-    } = req.query;
-
-    // ────────────────────────────────────────────────
-    // Decide which field name to use for the shop reference
-    // Try these common names in order — change priority according to YOUR schema
-    // ────────────────────────────────────────────────
-    const possibleShopFields = ['shopId', 'shop', 'store', 'storeId', 'vendor', 'vendorId'];
-
-    let shopFieldName = null;
-    let shopValue = shopId;
-
-    // If it's likely an ObjectId → convert it
-    if (mongoose.Types.ObjectId.isValid(shopId)) {
-      shopValue = new mongoose.Types.ObjectId(shopId);
-      console.log(`[fetchBookingsByShop] shopId is valid ObjectId → converting`);
-    }
-
-    // You can hard-code the correct field name here once you know it
-    // For now — we try to be flexible during debugging
-    shopFieldName = 'shopId';           // ←←← MOST COMMON — change this to match your schema
-    // shopFieldName = 'shop';          // use this if it's a reference field
-    // shopFieldName = 'storeId';
-
-    let filter = {
-      [shopFieldName]: shopValue,
-    };
-
-    // Status filters
-    if (bookingStatus) filter.bookingStatus = bookingStatus;
-    if (paymentStatus) filter.paymentStatus = paymentStatus;
-
-    // ────────────────────────────────────────────────
-    //        Date / Period filtering
-    // ────────────────────────────────────────────────
-    if (date || (startDate && endDate) || period) {
-      let startOfRange, endOfRange;
-
-      const now = new Date();
-
-      if (date) {
-        startOfRange = new Date(date);
-        startOfRange.setHours(0, 0, 0, 0);
-
-        endOfRange = new Date(date);
-        endOfRange.setHours(23, 59, 59, 999);
-      } 
-      else if (startDate && endDate) {
-        startOfRange = new Date(startDate);
-        startOfRange.setHours(0, 0, 0, 0);
-
-        endOfRange = new Date(endDate);
-        endOfRange.setHours(23, 59, 59, 999);
-      } 
-      else if (period) {
-        if (period === 'today') {
-          startOfRange = new Date(now);
-          startOfRange.setHours(0, 0, 0, 0);
-          endOfRange = new Date(now);
-          endOfRange.setHours(23, 59, 59, 999);
-        } 
-        else if (period === 'lastWeek') {
-          startOfRange = new Date(now);
-          startOfRange.setDate(now.getDate() - 7);
-          startOfRange.setHours(0, 0, 0, 0);
-          endOfRange = new Date(now);
-          endOfRange.setHours(23, 59, 59, 999);
-        } 
-        else if (period === 'lastMonth') {
-          startOfRange = new Date(now);
-          startOfRange.setMonth(now.getMonth() - 1);
-          startOfRange.setHours(0, 0, 0, 0);
-          endOfRange = new Date(now);
-          endOfRange.setHours(23, 59, 59, 999);
+        if (!shopId) {
+            return res.status(400).json({
+                success: false,
+                message: "shopId parameter is required in the URL",
+            });
         }
-      }
 
-      if (startOfRange && endOfRange) {
-        filter.bookingDate = { $gte: startOfRange, $lte: endOfRange };
-      }
+        console.log(`[fetchBookingsByShop] shopId received: ${shopId} (type: ${typeof shopId})`);
+
+        const {
+            date,
+            startDate,
+            endDate,
+            period,
+            bookingStatus,
+            paymentStatus,
+        } = req.query;
+
+        // ────────────────────────────────────────────────
+        // Decide which field name to use for the shop reference
+        // Try these common names in order — change priority according to YOUR schema
+        // ────────────────────────────────────────────────
+        const possibleShopFields = ['shopId', 'shop', 'store', 'storeId', 'vendor', 'vendorId'];
+
+        let shopFieldName = null;
+        let shopValue = shopId;
+
+        // If it's likely an ObjectId → convert it
+        if (mongoose.Types.ObjectId.isValid(shopId)) {
+            shopValue = new mongoose.Types.ObjectId(shopId);
+            console.log(`[fetchBookingsByShop] shopId is valid ObjectId → converting`);
+        }
+
+        // You can hard-code the correct field name here once you know it
+        // For now — we try to be flexible during debugging
+        shopFieldName = 'shopId';           // ←←← MOST COMMON — change this to match your schema
+        // shopFieldName = 'shop';          // use this if it's a reference field
+        // shopFieldName = 'storeId';
+
+        let filter = {
+            [shopFieldName]: shopValue,
+        };
+
+        // Status filters
+        if (bookingStatus) filter.bookingStatus = bookingStatus;
+        if (paymentStatus) filter.paymentStatus = paymentStatus;
+
+        // ────────────────────────────────────────────────
+        //        Date / Period filtering
+        // ────────────────────────────────────────────────
+        if (date || (startDate && endDate) || period) {
+            let startOfRange, endOfRange;
+
+            const now = new Date();
+
+            if (date) {
+                startOfRange = new Date(date);
+                startOfRange.setHours(0, 0, 0, 0);
+
+                endOfRange = new Date(date);
+                endOfRange.setHours(23, 59, 59, 999);
+            }
+            else if (startDate && endDate) {
+                startOfRange = new Date(startDate);
+                startOfRange.setHours(0, 0, 0, 0);
+
+                endOfRange = new Date(endDate);
+                endOfRange.setHours(23, 59, 59, 999);
+            }
+            else if (period) {
+                if (period === 'today') {
+                    startOfRange = new Date(now);
+                    startOfRange.setHours(0, 0, 0, 0);
+                    endOfRange = new Date(now);
+                    endOfRange.setHours(23, 59, 59, 999);
+                }
+                else if (period === 'lastWeek') {
+                    startOfRange = new Date(now);
+                    startOfRange.setDate(now.getDate() - 7);
+                    startOfRange.setHours(0, 0, 0, 0);
+                    endOfRange = new Date(now);
+                    endOfRange.setHours(23, 59, 59, 999);
+                }
+                else if (period === 'lastMonth') {
+                    startOfRange = new Date(now);
+                    startOfRange.setMonth(now.getMonth() - 1);
+                    startOfRange.setHours(0, 0, 0, 0);
+                    endOfRange = new Date(now);
+                    endOfRange.setHours(23, 59, 59, 999);
+                }
+            }
+
+            if (startOfRange && endOfRange) {
+                filter.bookingDate = { $gte: startOfRange, $lte: endOfRange };
+            }
+        }
+
+        // ────────────────────────────────────────────────
+        //               DEBUGGING LOGS
+        // ────────────────────────────────────────────────
+        console.log('[fetchBookingsByShop] Final filter:');
+        console.log(JSON.stringify(filter, null, 2));
+
+        // Quick existence check — very useful during debugging
+        const quickCheck = await BookingModel.findOne({ [shopFieldName]: shopValue });
+        console.log(`[fetchBookingsByShop] Found at least one booking for this shop? → ${!!quickCheck}`);
+
+        if (quickCheck) {
+            console.log('[fetchBookingsByShop] Sample booking _id:', quickCheck._id);
+            console.log('[fetchBookingsByShop] Sample booking date:', quickCheck.bookingDate);
+        }
+
+        // ────────────────────────────────────────────────
+        //               MAIN QUERIES
+        // ────────────────────────────────────────────────
+        const total = await BookingModel.countDocuments(filter);
+
+        const bookings = await BookingModel.find(filter)
+            .skip(skip)
+            .limit(limit)
+            .sort({ bookingDate: -1 })
+            // .populate('customer', 'name phone')     // uncomment if needed
+            // .populate('service', 'name price')
+            .lean();   // faster if you don't need mongoose documents
+
+        console.log(`[fetchBookingsByShop] Found ${bookings.length} bookings on this page`);
+
+        return res.status(200).json({
+            success: true,
+            message: "Bookings fetched successfully",
+            shopId,
+            shopFieldUsed: shopFieldName,
+            total,
+            page,
+            totalPages: Math.ceil(total / limit),
+            countThisPage: bookings.length,
+            bookings,
+        });
+
+    } catch (error) {
+        console.error('[fetchBookingsByShop] Error:', error);
+        return res.status(500).json({
+            success: false,
+            message: "Server error while fetching bookings",
+            error: error.message,
+        });
     }
-
-    // ────────────────────────────────────────────────
-    //               DEBUGGING LOGS
-    // ────────────────────────────────────────────────
-    console.log('[fetchBookingsByShop] Final filter:');
-    console.log(JSON.stringify(filter, null, 2));
-
-    // Quick existence check — very useful during debugging
-    const quickCheck = await BookingModel.findOne({ [shopFieldName]: shopValue });
-    console.log(`[fetchBookingsByShop] Found at least one booking for this shop? → ${!!quickCheck}`);
-
-    if (quickCheck) {
-      console.log('[fetchBookingsByShop] Sample booking _id:', quickCheck._id);
-      console.log('[fetchBookingsByShop] Sample booking date:', quickCheck.bookingDate);
-    }
-
-    // ────────────────────────────────────────────────
-    //               MAIN QUERIES
-    // ────────────────────────────────────────────────
-    const total = await BookingModel.countDocuments(filter);
-
-    const bookings = await BookingModel.find(filter)
-      .skip(skip)
-      .limit(limit)
-      .sort({ bookingDate: -1 })
-      // .populate('customer', 'name phone')     // uncomment if needed
-      // .populate('service', 'name price')
-      .lean();   // faster if you don't need mongoose documents
-
-    console.log(`[fetchBookingsByShop] Found ${bookings.length} bookings on this page`);
-
-    return res.status(200).json({
-      success: true,
-      message: "Bookings fetched successfully",
-      shopId,
-      shopFieldUsed: shopFieldName,
-      total,
-      page,
-      totalPages: Math.ceil(total / limit),
-      countThisPage: bookings.length,
-      bookings,
-    });
-
-  } catch (error) {
-    console.error('[fetchBookingsByShop] Error:', error);
-    return res.status(500).json({
-      success: false,
-      message: "Server error while fetching bookings",
-      error: error.message,
-    });
-  }
 };
 
-const fetchServicebyShop = async (req,res) => {
+const fetchServicebyShop = async (req, res) => {
     try {
         const shopId = req.params.shopId
-        console.log("shopId in controller",shopId)
+        console.log("shopId in controller", shopId)
         const service = await fetchServiceByShopId(shopId)
-        if(service){
+        if (service) {
             res.status(200).json({
-                success:true,
-                message:"successfull fetched service",
+                success: true,
+                message: "successfull fetched service",
                 service
             })
-        }else{
+        } else {
             res.status(404).json({
-                success:false,
-                message:"failed to fetch service"
+                success: false,
+                message: "failed to fetch service"
             })
         }
     } catch (error) {
-        console.error("error in fetching serive",error)
+        console.error("error in fetching serive", error)
         res.status(500).json({
-            success:false,
-            message:"internal server error"
+            success: false,
+            message: "internal server error"
         })
     }
 }
 
-const fetchBarbersbyShop = async (req,res) => {
+const fetchBarbersbyShop = async (req, res) => {
     try {
         const shopId = req.params.shopId
         const service = await fetchBarbersByShopId(shopId)
-        if(service){
+        if (service) {
             res.status(200).json({
-                success:true,
-                message:"successfull fetched barbers",
+                success: true,
+                message: "successfull fetched barbers",
                 service
             })
-        }else{
+        } else {
             res.status(404).json({
-                success:false,
-                message:"failed to fetch barbers"
+                success: false,
+                message: "failed to fetch barbers"
             })
         }
     } catch (error) {
-        console.error("error in fetching serive",error)
+        console.error("error in fetching serive", error)
         res.status(500).json({
-            success:false,
-            message:"internal server error"
+            success: false,
+            message: "internal server error"
         })
     }
 }
 
-const viewService = async (req,res) => {
+const viewService = async (req, res) => {
     try {
-       const service = await ServiceModel.find({}) 
-       res.status(200).json({
-        success:true,
-        message:"successfully fetched all service",
-        service
-       })
+        const service = await ServiceModel.find({})
+        res.status(200).json({
+            success: true,
+            message: "successfully fetched all service",
+            service
+        })
     } catch (error) {
         console.log(error)
     }
 }
 
-const delService = async (req,res) => {
+const delService = async (req, res) => {
     try {
         const serviceId = req.params.serviceId
         const service = await ServiceModel.findByIdAndDelete(serviceId)
-       res.status(200).json({
-        success:true,
-        message:"successfully delete  service",
-        service
-       })
+        res.status(200).json({
+            success: true,
+            message: "successfully delete  service",
+            service
+        })
     } catch (error) {
         console.log(error)
     }
 }
 
-const createAsBarber = async (req,res) => {
-        try {
+const createAsBarber = async (req, res) => {
+    try {
         const shopId = req.params.shopId
         const token = req.headers['authorization']?.split(' ')[1];
         if (!token) {
@@ -1500,40 +1536,40 @@ const createAsBarber = async (req,res) => {
             });
         }
         const tokenData = await Decoder(token);
-        console.log("TOKEN DATA:",tokenData)
+        console.log("TOKEN DATA:", tokenData)
         const shopOwnerId = tokenData.id
         const shopOwner = await LocationAndNameOfOwner(shopOwnerId, shopId);
         console.log(shopOwner, "SHOP OWNER");
-        const transformToBarberPayload = (shopOwner,shopOwnerId) => {
-        return {
-            BarberName: `${shopOwner.ShopOwnerId.firstName}${shopOwner.ShopOwnerId.lastName}`,
-            From: shopOwner.ExactLocation,
-            shopId:shopOwner._id,
-            shoperId: shopOwnerId
+        const transformToBarberPayload = (shopOwner, shopOwnerId) => {
+            return {
+                BarberName: `${shopOwner.ShopOwnerId.firstName}${shopOwner.ShopOwnerId.lastName}`,
+                From: shopOwner.ExactLocation,
+                shopId: shopOwner._id,
+                shoperId: shopOwnerId
+            };
         };
-        };
-        const barberPayload = transformToBarberPayload(shopOwner,shopOwnerId    );
+        const barberPayload = transformToBarberPayload(shopOwner, shopOwnerId);
 
 
         const shopOwnerToBarber = await addBarbers(barberPayload)
         const isActive = await updateShopActiveStatus(shopId)
-        if(shopOwnerToBarber){
+        if (shopOwnerToBarber) {
             res.status(200).json({
-                success:true,
-                message:"successfully convert owner to barber",
+                success: true,
+                message: "successfully convert owner to barber",
                 shopOwnerToBarber,
-                isActive:isActive
+                isActive: isActive
             })
-        }else{
+        } else {
             res.status(404).json({
-                success:false,
-                message:"failed to convert owner as barber"
+                success: false,
+                message: "failed to convert owner as barber"
             })
         }
     } catch (error) {
         res.status(500).json({
-            success:false,
-            message:"internal server error"
+            success: false,
+            message: "internal server error"
         })
         console.error(error)
     }
@@ -1566,7 +1602,8 @@ module.exports = {
     viewbankDetails,
     saveBankDetails,
     getAllPremiumShops,
-    makePremium,
+    createPremiumOrder,
+    verifyPremiumAndUpgrade,
     deleteBarber,
     myprofile,
     AddShop,

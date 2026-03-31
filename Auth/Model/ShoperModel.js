@@ -30,6 +30,10 @@ const ShopOwner = new Schema({
     role:{
         type:String,
         default:'shop'
+    },
+    PushToken: {
+        type: String,
+        default: null
     }
 })
 

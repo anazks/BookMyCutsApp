@@ -1,12 +1,12 @@
 const express = require('express');
 const router = express.Router();
-const {upsertPayoutAccount,getEarningsSummary} = require('../Controller/PayoutController')
+const {upsertPayoutAccount,getEarningsSummary,fetchBankDetails,requestWithdrawal,updatePayoutAccount} = require('../Controller/PayoutController')
 const Booking = require('../../Booking/Models/BookingModel')
+const PayoutRequest = require('../Model/PayoutRequest')
 const crypto = require('crypto');
 
-router.route('/accounts').post(upsertPayoutAccount)
+router.route('/accounts').post(upsertPayoutAccount).get(fetchBankDetails).put(updatePayoutAccount)
 router.route('/earnings').get(getEarningsSummary)
-
 
 router.post('/razorpayx-webhook', async (req, res) => {
     try {
@@ -30,39 +30,84 @@ router.post('/razorpayx-webhook', async (req, res) => {
         const event = req.body.event;
         const payoutData = req.body.payload.payout.entity;
         
-        // Retrieve the bookingId we safely stored in 'notes' during the worker phase
+        // Retrieve the IDs we safely stored in 'notes' during the worker phase
         const bookingId = payoutData.notes?.booking_id;
+        const payoutRequestId = payoutData.notes?.payout_request_id;
 
-        if (!bookingId) {
-            console.error("❌ Webhook Error: No booking_id found in notes.");
-            return res.status(200).send('Missing booking ID'); // Still return 200 so Razorpay stops retrying
+        if (!bookingId && !payoutRequestId) {
+            console.error("❌ Webhook Error: No booking_id or payout_request_id found in notes.");
+            return res.status(200).send('Missing ID'); 
         }
 
         // ==========================================
         // 💰 EVENT 1: MONEY SUCCESSFULLY DEPOSITED
         // ==========================================
         if (event === 'payout.processed') {
-            const utr = payoutData.utr; // The official Bank Reference Number!
+            const utr = payoutData.utr; 
 
-            await Booking.findByIdAndUpdate(bookingId, {
-                payoutStatus: 'completed',
-                utr: utr
-            });
-
-            console.log(`✅ [WEBHOOK] Payout Settled! UTR: ${utr} saved to Booking ${bookingId}`);
+            if (payoutRequestId) {
+                // Handle Manual Withdrawal Request (Master Record)
+                const payoutReq = await PayoutRequest.findByIdAndUpdate(payoutRequestId, {
+                    status: 'settled',
+                    utr: utr
+                });
+                
+                if (payoutReq && payoutReq.bookingIds.length > 0) {
+                    await Booking.updateMany(
+                        { _id: { $in: payoutReq.bookingIds } },
+                        { $set: { payoutStatus: 'settled', utr: utr } }
+                    );
+                    
+                    // Also mark any individual 'earning' records corresponding to these bookings as 'settled'
+                    await PayoutRequest.updateMany(
+                        { bookingIds: { $in: payoutReq.bookingIds }, type: 'earning' },
+                        { $set: { status: 'settled', utr: utr } }
+                    );
+                }
+                console.log(`✅ [WEBHOOK] Manual Withdrawal Settled! Request: ${payoutRequestId}`);
+            } else if (bookingId) {
+                // Handle Legacy Single Booking Payout
+                await Booking.findByIdAndUpdate(bookingId, {
+                    payoutStatus: 'settled',
+                    utr: utr
+                });
+                console.log(`✅ [WEBHOOK] Payout Settled! Booking ${bookingId}`);
+            }
         } 
         
         // ==========================================
         // ❌ EVENT 2: BANK REJECTED THE TRANSFER 
-        // (e.g., Shop Owner gave a closed bank account number)
         // ==========================================
        else if (event === 'payout.rejected' || event === 'payout.reversed') {
-             await Booking.findByIdAndUpdate(bookingId, {
-                 payoutStatus: 'failed',
-                 failureReason: payoutData.failure_reason || 'Bank rejected the transfer'
-             });
-             
-             console.log(`❌ [WEBHOOK] Payout Failed for Booking ${bookingId}. Reason: ${payoutData.failure_reason}`);
+             const reason = payoutData.failure_reason || 'Bank rejected the transfer';
+
+             if (payoutRequestId) {
+                 const payoutReq = await PayoutRequest.findByIdAndUpdate(payoutRequestId, {
+                     status: 'failed',
+                     failureReason: reason
+                 });
+
+                 if (payoutReq && payoutReq.bookingIds.length > 0) {
+                     // Reset bookings to pending
+                     await Booking.updateMany(
+                         { _id: { $in: payoutReq.bookingIds } },
+                         { $set: { payoutStatus: 'pending', failureReason: reason } }
+                     );
+
+                     // Reset individual earning records to pending so they show up in balance again
+                     await PayoutRequest.updateMany(
+                         { bookingIds: { $in: payoutReq.bookingIds }, type: 'earning' },
+                         { $set: { status: 'pending' } }
+                     );
+                 }
+                 console.log(`❌ [WEBHOOK] Manual Withdrawal Failed! Request: ${payoutRequestId}. Reason: ${reason}`);
+             } else if (bookingId) {
+                 await Booking.findByIdAndUpdate(bookingId, {
+                     payoutStatus: 'failed',
+                     failureReason: reason
+                 });
+                 console.log(`❌ [WEBHOOK] Payout Failed for Booking ${bookingId}`);
+             }
         }
 
         // 4. ALWAYS return a 200 OK instantly. 

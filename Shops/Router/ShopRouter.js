@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const multer = require('multer')
-const {fetchBookingsByShop,viewMyshop,viewSingleShopBarbers,viewSingleShopService,myprofile,viewAllBookingOfShops,myShopProfile,AddShop,ViewAllShop,addService,ViewAllServices,addBarber,ViewAllBarbers,viewSigleShop,viewMyService,viewMyBarbers,updateBarber, deleteBarber,makePremium, getAllPremiumShops, saveBankDetails, viewbankDetails, deleteBankDetails, upadateBankdetails,editService, deleteService,findNearByShops,deleteShop,addProfileImage,deleteMedia,updateMediaDetails,search,fetchAllUniqueService,filterShopsByService,viewAllService,editShop,getShop, fetchServicebyShop, fetchBarbersbyShop,viewService,delService,createAsBarber } = require('../Controller/ShopController')
+const {fetchBookingsByShop,viewMyshop,viewSingleShopBarbers,viewSingleShopService,myprofile,viewAllBookingOfShops,myShopProfile,AddShop,ViewAllShop,addService,ViewAllServices,addBarber,ViewAllBarbers,viewSigleShop,viewMyService,viewMyBarbers,updateBarber, deleteBarber,createPremiumOrder, verifyPremiumAndUpgrade, getAllPremiumShops, saveBankDetails, viewbankDetails, deleteBankDetails, upadateBankdetails,editService, deleteService,findNearByShops,deleteShop,addProfileImage,deleteMedia,updateMediaDetails,search,fetchAllUniqueService,filterShopsByService,viewAllService,editShop,getShop, fetchServicebyShop, fetchBarbersbyShop,viewService,delService,createAsBarber } = require('../Controller/ShopController')
 const {uploadMedia}  = require('../../Shops/CloudStorageCurds/CloudCurds')
 const upload = require('../../Cloudinary/MulterConfig')
 const WorkingHoursRoutes = require('../Router/WorkingHoursRoutes');
@@ -43,7 +43,8 @@ router.route('/viewMyBarbers').get(viewMyBarbers)
 router.route('/updateBarber/:id').put(updateBarber)
 router.route('/deleteBarber/:id/:shopId').delete(deleteBarber)
 
-router.route('/premium').post(makePremium)
+router.route('/premium/order').post(createPremiumOrder)
+router.route('/premium/verify').post(verifyPremiumAndUpgrade)
 router.route('/getAllPremium').get(getAllPremiumShops)
 
 router.route('/saveBankDetails').post(saveBankDetails)

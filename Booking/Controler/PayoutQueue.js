@@ -1,11 +1,15 @@
 const { Queue } = require('bullmq');
 
-// Ensure you have REDIS_URL configured in your .env
-// e.g. REDIS_URL="redis://red-d603ajt6ubrc73d0jnd0:6379"
-const connection = { url: process.env.REDIS_URL };
+const connection = require('../../Config/redisBull');
 
 // Create the Payout Queue
-const payoutQueue = new Queue('PayoutQueue', { connection });
+const payoutQueue = new Queue('PayoutQueue', { 
+    connection,
+    defaultJobOptions: {
+        removeOnComplete: true,
+        removeOnFail: false
+    }
+});
 
 console.log("bullmq PayoutQueue initialized.");
 

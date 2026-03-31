@@ -20,6 +20,8 @@ const checkExpiredPremium = require('./Shops/ShopScheduler/Scheduler');
 const { seedKeralaCities } = require('./Auth/Controllers/seedCities');
 require('./Cloudinary/CloudinaryConfig')
 require('./Booking/Controler/PayoutWorker')
+const PayoutRequest = require('./Shops/Model/PayoutRequest');
+const Booking = require('./Booking/Models/BookingModel');
 
 // Define a route for the root URL
 connectToDatabase();
@@ -82,6 +84,21 @@ console.log("Cron job scheduled successfully - will run every 10 minutes");
 app.listen(port, () => {
   console.log(`Server is running at http://localhost:${port}`);
   setupSwagger(app);
+
+  // --- TEMPORARY CLEANUP ROUTE ---
+  app.post('/api/debug/clear-payouts', async (req, res) => {
+    try {
+      const pResult = await PayoutRequest.deleteMany({});
+      const bResult = await Booking.updateMany({}, { $set: { payoutStatus: 'pending' } });
+      res.json({
+        message: "Data cleared successfully",
+        payoutsDeleted: pResult.deletedCount,
+        bookingsReset: bResult.modifiedCount
+      });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
 
   // Optional: Run the check once immediately when server starts
   console.log("Running initial premium check...");

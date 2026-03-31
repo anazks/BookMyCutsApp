@@ -1,7 +1,7 @@
 const asyncHandler = require("express-async-handler");
-const { registerUserUseCase,loginuserUsecause,registerShoperUseCase,loginShoperUsecause,sendOtpmobileNo,verifyOtpFunction,verifyGoogleIdToken,adminLoginUsecause } = require("../UseCauses/userUseCause");
+const { registerUserUseCase, loginuserUsecause, registerShoperUseCase, loginShoperUsecause, sendOtpmobileNo, verifyOtpFunction, verifyGoogleIdToken, adminLoginUsecause } = require("../UseCauses/userUseCause");
 const decorder = require("../../TokenDecoder/Decoder");
-const {getUserProfile,deleteUserFunction,getAllShopOwners, updatePassword,fetchUsers,findUserById,modifyShopOwner,deleteShopOwner,getNearestCities} = require("../Repos/userRepo")
+const { getUserProfile, deleteUserFunction, getAllShopOwners, updatePassword, fetchUsers, findUserById, modifyShopOwner, deleteShopOwner, getNearestCities } = require("../Repos/userRepo")
 constm = require('bcryptjs')
 const jwt = require('jsonwebtoken');
 const otpModel = require('../Model/OtpModel')
@@ -16,66 +16,66 @@ const Notification = require('../Model/Notification')
 
 
 
-const userRegistration = asyncHandler(async (req,res)=>{
-    const data = req.body;
-    const result = await registerUserUseCase(data);
-    console.log(result,"user registartion")
-    res.json({
-        success:true,
-        message:"User registration successfull",
-        result
-    })
+const userRegistration = asyncHandler(async (req, res) => {
+  const data = req.body;
+  const result = await registerUserUseCase(data);
+  console.log(result, "user registartion")
+  res.json({
+    success: true,
+    message: "User registration successfull",
+    result
+  })
 });
 
 const userLogin = asyncHandler(async (req, res) => {
-    try {
-        const result = await loginuserUsecause(req.body);
+  try {
+    const result = await loginuserUsecause(req.body);
 
-        if (result) {
-            return res.status(200).json({
-                success: true,
-                message: result.message || "Login successful",
-                token: result.token,
-                user: result.user
-            });
-        }if (result === 0) {
-          res.json({
-            success:false,
-            message:"authentication failed"
-            
-          })
-        } else {
-          
-        }{
-            res.status(401).json({
-            success: false,
-            message: result.message || "Authentication failed"
-        });
-        }
+    if (result) {
+      return res.status(200).json({
+        success: true,
+        message: result.message || "Login successful",
+        token: result.token,
+        user: result.user
+      });
+    } if (result === 0) {
+      res.json({
+        success: false,
+        message: "authentication failed"
 
-       
+      })
+    } else {
 
-    } catch (error) {
-        console.error("userLogin controller error:", error);
-        return res.status(500).json({
-            success: false,
-            message: "Internal server error",
-            // error: error.message   // ← uncomment only during development
-        });
+    } {
+      res.status(401).json({
+        success: false,
+        message: result.message || "Authentication failed"
+      });
     }
+
+
+
+  } catch (error) {
+    console.error("userLogin controller error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+      // error: error.message   // ← uncomment only during development
+    });
+  }
 });
 
 
 
-const ShopRegister = asyncHandler (async (req,res)=>{
-    const data = req.body;
-    console.log(data)
-    const shop = await registerShoperUseCase(data);
-    res.json({
-        success:true, 
-        message:"User registration successfull",
-        shop
-    })
+const ShopRegister = asyncHandler(async (req, res) => {
+  const data = req.body;
+  console.log(data)
+  const shop = await registerShoperUseCase(data);
+  res.json({
+    success: true,
+    message: "User registration successfull",
+    shop
+  })
 })
 const login = asyncHandler(async (req, res) => {
   const data = req.body;
@@ -106,73 +106,73 @@ const { error } = require("console");
 const { LookupRequestWithCorId } = require("twilio/lib/rest/lookups/v2/query");
 
 
-const getUsers = async (req,res) => {
+const getUsers = async (req, res) => {
   try {
-      const page = parseInt(req.query.page)
-      const limit = parseInt(req.query.page)
-      const users = await fetchUsers(page,limit)
-        res.status(200).json({
-        success:true,
-        message:"succesfully fetched users",
-        users
-      })
+    const page = parseInt(req.query.page)
+    const limit = parseInt(req.query.page)
+    const users = await fetchUsers(page, limit)
+    res.status(200).json({
+      success: true,
+      message: "succesfully fetched users",
+      users
+    })
   } catch (error) {
-    console.error('failed to fetch users',error)
+    console.error('failed to fetch users', error)
   }
 }
 
 const getProfile = asyncHandler(async (req, res) => {
-    let token = req.headers['authorization']?.split(' ')[1];
+  let token = req.headers['authorization']?.split(' ')[1];
 
-    console.log("token received:", token);
+  console.log("token received:", token);
 
-    if (!token) {
-        return res.status(401).json({ message: 'No token provided' });
-    }
+  if (!token) {
+    return res.status(401).json({ message: 'No token provided' });
+  }
 
-    try {
-        const tokenData = await decorder(token);
-        console.log("tokenData:", tokenData);
+  try {
+    const tokenData = await decorder(token);
+    console.log("tokenData:", tokenData);
 
-        const userData = await getUserProfile(tokenData);
-        
-        return res.json({
-            success: true,
-            message: "User profile fetched successfully",
-            user: userData
-        });
+    const userData = await getUserProfile(tokenData);
 
-    } catch (error) {
-        console.error("Token verification failed:", error.message);
-        return res.status(401).json({ message: 'Invalid token' });
-    }
+    return res.json({
+      success: true,
+      message: "User profile fetched successfully",
+      user: userData
+    });
+
+  } catch (error) {
+    console.error("Token verification failed:", error.message);
+    return res.status(401).json({ message: 'Invalid token' });
+  }
 });
 
 
-const otpRequest = async  (req,res) => {
-    try {
-        const data = req.body
-        let otp = await sendOtpmobileNo(data)
-        console.log(otp,"otp")
-        if(otp){
-            res.status(200).json({
-                success:true,
-                message:"otp is send to email"
-            })
-        }else{
-            res.status(404).json({
-                success:false,
-                message:"faild to generate otp"
-            })
-        }
-    } catch (error) {
-        return res.status(401).json({ message: 'internal server error' })
+const otpRequest = async (req, res) => {
+  try {
+    const data = req.body
+    let otp = await sendOtpmobileNo(data)
+    console.log(otp, "otp")
+    if (otp) {
+      res.status(200).json({
+        success: true,
+        message: "otp is send to email"
+      })
+    } else {
+      res.status(404).json({
+        success: false,
+        message: "faild to generate otp"
+      })
     }
+  } catch (error) {
+    return res.status(401).json({ message: 'internal server error' })
+  }
 }
 
 const verifyOtp = async (req, res) => {
   try {
-    let { mobileNo,otp,role} = req.body
+    let { mobileNo, otp, role } = req.body
 
     if (!mobileNo) {
       return res.status(400).json({ success: false, message: "Email is required" });
@@ -184,7 +184,7 @@ const verifyOtp = async (req, res) => {
 
     otp = Number(otp); // safe now
 
-    const result = await verifyOtpFunction(otp, mobileNo,role);
+    const result = await verifyOtpFunction(otp, mobileNo, role);
 
     if (result.success) {
       return res.status(200).json({
@@ -201,25 +201,25 @@ const verifyOtp = async (req, res) => {
   }
 };
 
-const deleteUser = async (req,res) => {
+const deleteUser = async (req, res) => {
   try {
     const userId = req.params.id
     const deleteUser = await deleteUserFunction(userId)
-    if(deleteUser){
+    if (deleteUser) {
       res.status(200).json({
-        success:true,
-        message:'successfully deleted the user'
+        success: true,
+        message: 'successfully deleted the user'
       })
     }
     res.status(400).json({
-      success:false,
-      message:"failed to delete user"
+      success: false,
+      message: "failed to delete user"
     })
   } catch (error) {
     console.error(error)
     res.status(500).json({
-      success:false,
-      message:'internal server error'
+      success: false,
+      message: 'internal server error'
     })
   }
 }
@@ -239,8 +239,8 @@ const viewAllShopOwners = async (req, res) => {
     }
 
     const { shopOwners, totalShopOwners } = await getAllShopOwners(page, limit);
-    console.log("shop Owner:",shopOwners)
-    console.log("totalShopOwner:",totalShopOwners)
+    console.log("shop Owner:", shopOwners)
+    console.log("totalShopOwner:", totalShopOwners)
     const totalPages = Math.ceil(totalShopOwners / limit);
 
     res.status(200).json({
@@ -503,203 +503,203 @@ const verifyForgotPasswordOtp = async (req, res) => {
   }
 };
 
-const resetPassword = async (req,res) => {
+const resetPassword = async (req, res) => {
   try {
     console.log(req.body)
-    const {role,password,email} = req.body
-    
+    const { role, password, email } = req.body
+
     const saltRounds = 10;
     const hashedPassword = await bcrypt.hash(password, saltRounds);
-    const user = await updatePassword(hashedPassword,email,role)
-    if(user){
+    const user = await updatePassword(hashedPassword, email, role)
+    if (user) {
       res.status(200).json({
-        success:true,
-        message:"successfully updated password",
+        success: true,
+        message: "successfully updated password",
         user
       })
-    }else{
+    } else {
       res.status(404).json({
-        success:false,
-        message:"failed to update password",
+        success: false,
+        message: "failed to update password",
       })
     }
 
   } catch (error) {
-   console.log(error)
+    console.log(error)
   }
 }
- 
-const fetchUser = async (req,res) => {
+
+const fetchUser = async (req, res) => {
   try {
     const userId = req.params.id
     const user = await findUserById(userId)
-    if(user){
+    if (user) {
       res.status(200).json({
-        success:true,
-        message:"successfully get user data",
+        success: true,
+        message: "successfully get user data",
         user
       })
-    }else{
+    } else {
       res.status(404).json({
-        success:false,
-        messsage:"failed to get shop owner"
+        success: false,
+        messsage: "failed to get shop owner"
       })
     }
   } catch (error) {
     console.log(error)
     res.status(500).json({
-      success:false,
-      message:"internal server error"
+      success: false,
+      message: "internal server error"
     })
   }
 }
 
-const removeShopOwner = async (req,res) => {
+const removeShopOwner = async (req, res) => {
   try {
     const userId = req.params.id
-    const user = deleteShopOwner(userId)    
-    if(user){
+    const user = deleteShopOwner(userId)
+    if (user) {
       res.status(200).json({
-        success:true,
-        message:"successfully deleted user",
+        success: true,
+        message: "successfully deleted user",
         user
       })
-    }else{
+    } else {
       res.statu(404).json({
-        success:false,
-        message:"deletion failed"
+        success: false,
+        message: "deletion failed"
       })
     }
   } catch (error) {
     console.log(error)
     res.status(500).json({
-      success:false,
-      message:"internar server error"
+      success: false,
+      message: "internar server error"
     })
   }
 }
 
-const updateShopOwner = async (req,res) => {
+const updateShopOwner = async (req, res) => {
   try {
     const userId = req.params.id
     const updatedData = req.body
-    const shopOwner = await modifyShopOwner(userId,updatedData)
-    if(shopOwner){
+    const shopOwner = await modifyShopOwner(userId, updatedData)
+    if (shopOwner) {
       res.status(200).json({
-        success:true,
-        message:"successfully updated shop owner",
+        success: true,
+        message: "successfully updated shop owner",
         shopOwner
       })
-    }else{
+    } else {
       res.status(404).json({
-        success:false,
-        message:"failed update shop owner"
+        success: false,
+        message: "failed update shop owner"
       })
     }
   } catch (error) {
     res.status(500).json({
-      success:false,
-      message:"internal server error"
+      success: false,
+      message: "internal server error"
     })
     console.log(error)
   }
 }
 
-const userGoogleSignin = async (req,res) => { 
+const userGoogleSignin = async (req, res) => {
   try {
     const data = req.body
     console.log("REQUEST HIT THE BACKEND >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
     const verified = await verifyGoogleIdToken(data)
-    console.log(verified,"verified ")
+    console.log(verified, "verified ")
     const token = verified.token
-    console.log(token,"token >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
+    console.log(token, "token >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
     const user = {
-      id:verified.data._id,
-      firstName:verified.data.firstName,
-      lastName:verified.data.lastName,
-      email:verified.data.email
+      id: verified.data._id,
+      firstName: verified.data.firstName,
+      lastName: verified.data.lastName,
+      email: verified.data.email
     }
-    console.log("user .................",user)
-    if(verified){
+    console.log("user .................", user)
+    if (verified) {
       res.status(200).json({
-        success:true,
-        message:"login successfully",
+        success: true,
+        message: "login successfully",
         token,
         user
       })
-    }else{
+    } else {
       res.status(404).json({
-        success:false,
-        message:"login failed",
+        success: false,
+        message: "login failed",
       })
     }
   } catch (error) {
     console.log(error)
     res.status(500).json({
-      success:false,
-      message:"interval server error"
+      success: false,
+      message: "interval server error"
     })
   }
 }
 
-const AdminRegistration = async (req,res) => {
+const AdminRegistration = async (req, res) => {
   try {
     const data = req.body
-    const password =  data.password
+    const password = data.password
     const saltRounds = 10;
     const hashedPassword = await bcrypt.hash(password, saltRounds);
     data.password = hashedPassword;  // assign properly
     const admin = await AdminModel.create(data);
     res.status(200).json({
-      success:true,
-      message:"successfull registered as admin",
+      success: true,
+      message: "successfull registered as admin",
       admin
     })
   } catch (error) {
     console.log(error)
     res.status(500).json({
-      success:false,
-      message:"internal server error"
+      success: false,
+      message: "internal server error"
     })
   }
 }
 
 const adminLogin = asyncHandler(async (req, res) => {
-    try {
-        const result = await adminLoginUsecause(req.body);
+  try {
+    const result = await adminLoginUsecause(req.body);
 
-        if (result) {
-            return res.status(200).json({
-                success:                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        true,
-                message: result.message || "Login successful",
-                token: result.token,
-                user: result.user
-            });
-        }if (result === 0) {
-          res.json({
-            success:false,
-            message:"authentication failed"
-            
-          })
-        } else {
-          
-        }{
-            res.status(401).json({
-            success: false,
-            message: result.message || "Authentication failed"
-        });
-        }
+    if (result) {
+      return res.status(200).json({
+        success: true,
+        message: result.message || "Login successful",
+        token: result.token,
+        user: result.user
+      });
+    } if (result === 0) {
+      res.json({
+        success: false,
+        message: "authentication failed"
 
-       
+      })
+    } else {
 
-    } catch (error) {
-        console.error("userLogin controller error:", error);
-        return res.status(500).json({
-            success: false,
-            message: "Internal server error",
-            // error: error.message   // ← uncomment only during development
-        });
+    } {
+      res.status(401).json({
+        success: false,
+        message: result.message || "Authentication failed"
+      });
     }
+
+
+
+  } catch (error) {
+    console.error("userLogin controller error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+      // error: error.message   // ← uncomment only during development
+    });
+  }
 });
 
 
@@ -732,7 +732,7 @@ const saveNotificationToken = async (req, res) => {
   try {
     // 1. Extract the JWT from the Authorization Header
     const authHeader = req.headers.authorization;
-    
+
     // Check if header exists and starts with 'Bearer '
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       return res.status(401).json({ message: "Access denied. No token provided." });
@@ -743,28 +743,38 @@ const saveNotificationToken = async (req, res) => {
     // 2. Decode and Verify the User ID
     const secretKey = process.env.secretKey || "iamAnaz";
     const decoded = jwt.verify(token, secretKey);
-    
+
     // Most JWTs store the ID in 'id' or 'userId'. Adjust based on your login payload.
-    const userId = decoded.id || decoded.userId; 
+    const userId = decoded.id || decoded.userId;
 
     // 3. Get the Push Token from Params (as per your code setup)
     const pushToken = req.params.token;
 
-    // 4. Update the User Model
-    // We use findByIdAndUpdate to target the specific user and update their PushToken field
-    const user = await userModel.findByIdAndUpdate(
+    // 4. Update the Model
+    // We first try to find the ID in the userModel. 
+    // Since MongoDB ObjectIds are unique, if it's not a user, it will return null.
+    let userOrShop = await userModel.findByIdAndUpdate(
       userId,
       { PushToken: pushToken }, // Your model uses 'PushToken' (Capital P)
-      { new: true } // Returns the updated document
+      { new: true }
     );
 
-    if (!user) {
-      return res.status(404).json({ message: "User not found" });
+    // If not found in userModel, try ShoperModel
+    if (!userOrShop) {
+      userOrShop = await ShoperModel.findByIdAndUpdate(
+        userId,
+        { PushToken: pushToken },
+        { new: true }
+      );
     }
 
-    res.status(200).json({ 
-      success: true, 
-      message: "Push token saved successfully" 
+    if (!userOrShop) {
+      return res.status(404).json({ message: "User or Shop Owner not found" });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Push token saved successfully"
     });
 
   } catch (error) {
@@ -781,31 +791,31 @@ const saveNotificationToken = async (req, res) => {
     res.status(500).json({ message: "Internal Server Error" });
   }
 };
- 
+
 const sendArrivalCheckNotification = async (req, res) => {
   try {
     // 1. Get the userId directly from the URL
     const { userId } = req.params;
-    
+
     // Optional: Get bookingId from the request body if the frontend sends it
-    const { bookingId } = req.body; 
+    const { bookingId } = req.body;
 
     // 2. Find the user directly in the database
     const user = await User.findById(userId);
 
     // 3. Safety Check A: Does the user exist?
     if (!user) {
-      return res.status(404).json({ 
-        success: false, 
-        message: 'User not found.' 
+      return res.status(404).json({
+        success: false,
+        message: 'User not found.'
       });
     }
 
     // 4. Safety Check B: Does the user have a push token saved?
     if (!user.PushToken) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'This customer does not have notifications enabled.' 
+      return res.status(400).json({
+        success: false,
+        message: 'This customer does not have notifications enabled.'
       });
     }
 
@@ -818,21 +828,21 @@ const sendArrivalCheckNotification = async (req, res) => {
       body: 'Your barber is ready! Will you be arriving on time?',
       type: 'ARRIVAL_CHECK',
       // Pass the bookingId here so the user's phone knows which appointment to update
-      data: { bookingId: bookingId || null }, 
-      categoryId: 'arrival_check' 
+      data: { bookingId: bookingId || null },
+      categoryId: 'arrival_check'
     });
 
-    res.status(200).json({ 
-      success: true, 
-      message: 'Arrival check sent to the customer successfully.' 
+    res.status(200).json({
+      success: true,
+      message: 'Arrival check sent to the customer successfully.'
     });
 
   } catch (error) {
     console.error('Error in sendArrivalCheckNotification:', error);
-    res.status(500).json({ 
-      success: false, 
+    res.status(500).json({
+      success: false,
       message: 'Failed to send notification to customer.',
-      error: error.message 
+      error: error.message
     });
   }
 };
@@ -841,12 +851,12 @@ const fetchMyNotifications = async (req, res) => {
   try {
     // 1. Extract the Authorization header from the incoming request
     const authHeader = req.headers.authorization;
-    
+
     // 2. Check if the token actually exists and is formatted correctly
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return res.status(401).json({ 
-        success: false, 
-        message: 'Access Denied: No token provided.' 
+      return res.status(401).json({
+        success: false,
+        message: 'Access Denied: No token provided.'
       });
     }
 
@@ -859,31 +869,31 @@ const fetchMyNotifications = async (req, res) => {
 
     // 5. Grab the ID straight from the decoded payload
     // (If you signed it as _id instead of id, change this to decoded._id)
-    const documentId = decoded.id; 
+    const documentId = decoded.id;
 
     // 6. Fetch directly using ONLY the recipientId. 
     const notifications = await Notification.find({ recipientId: documentId })
       .sort({ createdAt: -1 }) // Newest first
       .limit(30);              // Keep it fast by only loading the latest 30
 
-    res.status(200).json({ 
-      success: true, 
-      data: notifications 
+    res.status(200).json({
+      success: true,
+      data: notifications
     });
   } catch (error) {
     console.error('Error fetching notifications:', error);
     if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
-      return res.status(401).json({ 
-        success: false, 
-        message: 'Invalid or expired token. Please log in again.' 
+      return res.status(401).json({
+        success: false,
+        message: 'Invalid or expired token. Please log in again.'
       });
     }
-    res.status(500).json({ 
-      success: false, 
-      message: 'Failed to fetch notifications.' 
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch notifications.'
     });
   }
 };
 
 
-module.exports = {fetchMyNotifications,sendArrivalCheckNotification,getNearbyCitiesController,adminLogin,AdminRegistration,userGoogleSignin,updateShopOwner,removeShopOwner,resetPassword,verifyForgotPasswordOtp,forgotPassword,viewAllShopOwners,deleteUser,userRegistration,userLogin,ShopRegister,login,getUsers,getProfile,otpRequest,verifyOtp,fetchUser,saveNotificationToken}
+module.exports = { fetchMyNotifications, sendArrivalCheckNotification, getNearbyCitiesController, adminLogin, AdminRegistration, userGoogleSignin, updateShopOwner, removeShopOwner, resetPassword, verifyForgotPasswordOtp, forgotPassword, viewAllShopOwners, deleteUser, userRegistration, userLogin, ShopRegister, login, getUsers, getProfile, otpRequest, verifyOtp, fetchUser, saveNotificationToken }

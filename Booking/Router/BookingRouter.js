@@ -3,7 +3,7 @@ const router = express.Router();
 const jwt = require('jsonwebtoken');
 const secretkey = process.env.secretKey;
 
-const {checkAvailability,AddBooking,createOrder,getMybooking,findDashboardIncome,verifyPayment,barberFreeSlots,fetchAllAvailableTimeSlots,fetchUpComeingBooking,fetchAllbookings, getbookings} = require('../Controler/BookingController');
+const {completeBooking, checkAvailability,AddBooking,createOrder,getMybooking,findDashboardIncome,verifyPayment,barberFreeSlots,fetchAllAvailableTimeSlots,fetchUpComeingBooking,fetchAllbookings, getbookings} = require('../Controler/BookingController');
 const { verifyToken } = require('../../Middlewares/AuthMiddleWares/AuthMiddleWare');
 const UserModel = require('../../Auth/Model/UserModel');
 
@@ -28,6 +28,7 @@ router.route('/fetchAllAvailableTimeSlots').post(fetchAllAvailableTimeSlots)
 router.route('/fetchUpComingBooking/:id').get(fetchUpComeingBooking)
 router.route('/bookings').get(fetchAllbookings)
 router.route('/bookings/:id').get(getbookings)
+router.route('/complete-booking').post(completeBooking)
 router.get('/discount', async (req, res) => {
   try {
 
