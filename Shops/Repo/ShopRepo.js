@@ -151,7 +151,8 @@ module.exports.getMyBarbers = async(id)=>{
 module.exports.getAllBookingsOfShop = async (
   shopOwnerId,
   page = 1,
-  limit = 10
+  limit = 10,
+  status = null
 ) => {
   try {
     // 1️⃣ Find shops of owner
@@ -161,53 +162,77 @@ module.exports.getAllBookingsOfShop = async (
     ).lean();
 
     if (!shops.length) {
-      return { bookings: [], total: 0 };
+      return { bookings: [], total: 0, stats: { total: 0, completed: 0, confirmed: 0, pending: 0 } };
     }
 
     const shopIds = shops.map(shop => shop._id);
-
     const skip = (page - 1) * limit;
     
-    // Get start of today to include all bookings for the current day
-    const startOfToday = new Date();
-    startOfToday.setHours(0, 0, 0, 0);
+    // Build the query
+    const query = { shopId: { $in: shopIds } };
+
+    // If status is provided, filter by it
+    if (status) {
+      query.bookingStatus = status;
+      
+      // For 'completed' or 'cancelled', we usually want to see history, 
+      // so we don't apply the 'upcoming' filter.
+      // For 'pending' or 'confirmed', we keep the upcoming filter to avoid clutter.
+      if (status === 'pending' || status === 'confirmed') {
+        const startOfToday = new Date();
+        startOfToday.setHours(0, 0, 0, 0);
+        query["timeSlot.startingTime"] = { $gte: startOfToday };
+      }
+    } else {
+      // Default behavior: All upcoming non-cancelled bookings
+      const startOfToday = new Date();
+      startOfToday.setHours(0, 0, 0, 0);
+      query["timeSlot.startingTime"] = { $gte: startOfToday };
+      query.bookingStatus = { $ne: 'cancelled' };
+    }
 
     // 2️⃣ Fetch bookings with pagination and 3️⃣ statistics
-    const [bookings, upcomingTotal, stats] = await Promise.all([
-      BookingModel.find({ 
-        shopId: { $in: shopIds },
-        "timeSlot.startingTime": { $gte: startOfToday } 
-      })
+    const [bookings, totalCount, stats] = await Promise.all([
+      BookingModel.find(query)
         .populate("userId", "firstName")
         .populate("barberId", "BarberName")
         .populate("shopId", "shopName")
-        .sort({ "timeSlot.startingTime": 1 })
+        .sort({ "timeSlot.startingTime": status === 'completed' || status === 'cancelled' ? -1 : 1 }) // Descending for history
         .skip(skip)
         .limit(limit)
         .lean(),
 
-      BookingModel.countDocuments({ 
-        shopId: { $in: shopIds },
-        "timeSlot.startingTime": { $gte: startOfToday }
-      }),
+      BookingModel.countDocuments(query),
 
-      // Statistics across ALL time for these shops
+      // Statistics across for these shops based on the current date/status filter context
       (async () => {
-        const [total, completed, confirmed, pending] = await Promise.all([
-          BookingModel.countDocuments({ shopId: { $in: shopIds } }),
-          BookingModel.countDocuments({ shopId: { $in: shopIds }, bookingStatus: 'completed' }),
-          BookingModel.countDocuments({ shopId: { $in: shopIds }, bookingStatus: 'confirmed' }),
-          BookingModel.countDocuments({ shopId: { $in: shopIds }, bookingStatus: 'pending' })
+        // Base query for stats should follow the same time constraint as the list 
+        // to keep the numbers consistent for the shop owner.
+        const statsQuery = { shopId: { $in: shopIds } };
+        
+        // If not viewing history (completed/cancelled), apply upcoming filter to stats too
+        if (!status || (status !== 'completed' && status !== 'cancelled')) {
+           const startOfToday = new Date();
+           startOfToday.setHours(0, 0, 0, 0);
+           statsQuery["timeSlot.startingTime"] = { $gte: startOfToday };
+        }
+
+        const [total, completed, confirmed, pending, cancelled] = await Promise.all([
+          BookingModel.countDocuments(statsQuery),
+          BookingModel.countDocuments({ ...statsQuery, bookingStatus: 'completed' }),
+          BookingModel.countDocuments({ ...statsQuery, bookingStatus: 'confirmed' }),
+          BookingModel.countDocuments({ ...statsQuery, bookingStatus: 'pending' }),
+          BookingModel.countDocuments({ ...statsQuery, bookingStatus: 'cancelled' })
         ]);
-        return { total, completed, confirmed, pending };
+        return { total, completed, confirmed, pending, cancelled };
       })()
     ]);
 
-    return { bookings, total: upcomingTotal, stats };
+    return { bookings, total: totalCount, stats };
 
   } catch (error) {
     console.error("Error in getAllBookingsOfShop:", error);
-    return { bookings: [], total: 0 };
+    return { bookings: [], total: 0, stats: { total: 0, completed: 0, confirmed: 0, pending: 0 } };
   }
 };
 

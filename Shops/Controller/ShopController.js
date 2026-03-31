@@ -451,11 +451,22 @@ const viewAllBookingOfShops = asyncHandler(async (req, res) => {
 
         const page = parseInt(req.query.page) || 1;
         const limit = parseInt(req.query.limit) || 10;
+        const status = req.query.status;
+
+        // Validation for status enum
+        const allowedStatuses = ['pending', 'confirmed', 'completed', 'cancelled'];
+        if (status && !allowedStatuses.includes(status)) {
+            return res.status(400).json({
+                success: false,
+                message: `Invalid status. Must be one of: ${allowedStatuses.join(', ')}`
+            });
+        }
 
         const { bookings, total, stats } = await getAllBookingsOfShop(
             tokenData.id,
             page,
-            limit
+            limit,
+            status
         );
 
         return res.status(200).json({
