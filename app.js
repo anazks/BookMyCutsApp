@@ -78,7 +78,11 @@ const scheduledJob = cron.schedule('0 0 */1 * *', async () => {
 
 console.log("Cron job scheduled successfully - will run every 10 minutes");
 
+app.set('trust proxy', true);
 
+app.get('/', (req, res) => {
+    res.send('Hello from Node.js behind NGINX!');
+});
 
 // Start the server
 app.listen(port, () => {

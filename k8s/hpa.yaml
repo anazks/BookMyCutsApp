@@ -1,0 +1,27 @@
+# This file creates the Auto-Scaling magic!
+# It watches your 'bookmycuts-backend' deployment and controls the number of running containers.
+# ----------------------------------------------------------------------------------------------
+
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: bookmycuts-autoscaler
+spec:
+  # 1. WHAT TO SCALE
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: bookmycuts-backend
+  
+  # 2. THE LIMITS (Protect your server and your wallet)
+  minReplicas: 2      # Absolute minimum servers running at night
+  maxReplicas: 10     # Absolute maximum servers if the app goes viral
+  
+  # 3. THE TRIGGER
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 75  # If the average CPU hits 75%, Kubernetes automatically creates a new Container to help out!

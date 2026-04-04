@@ -1,0 +1,82 @@
+# This file replaces your docker-compose.yml (It creates the Containers and the Network)
+# --------------------------------------------------------------------------------------
+
+# 1. REDIS SERVICE (Internal Network)
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+spec:
+  ports:
+    - port: 6379
+  selector:
+    app: redis
+---
+# 2. REDIS DEPLOYMENT (The Redis Container)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis-deployment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+    spec:
+      containers:
+      - name: redis
+        image: redis:latest
+        ports:
+        - containerPort: 6379
+
+---
+# 3. NODE APP SERVICE (Replaces NGINX - Exposes Port 80 to the world)
+apiVersion: v1
+kind: Service
+metadata:
+  name: bookmycuts-service
+spec:
+  type: LoadBalancer     # This automatically creates a Load Balancer just like NGINX
+  ports:
+    - port: 80           # The front door port
+      targetPort: 3002   # The port your app.js is secretly listening on
+  selector:
+    app: bookmycuts
+
+---
+# 4. NODE APP DEPLOYMENT (The Node.js Containers)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bookmycuts-backend
+spec:
+  replicas: 3            # We start with 3 copies, just like Docker Compose
+  selector:
+    matchLabels:
+      app: bookmycuts
+  template:
+    metadata:
+      labels:
+        app: bookmycuts
+    spec:
+      containers:
+      - name: bookmycuts-node
+        # IMPORTANT: Kubernetes cannot build images from local files. 
+        # You will need to build the image (docker build -t myname/bookmycuts .) 
+        image: bookmycuts:local
+        imagePullPolicy: Never    # Forces Kubernetes to use the image baked on your laptop instead of the internet
+        ports:
+        - containerPort: 3002
+        env:
+        - name: REDIS_URL
+          value: "redis://redis:6379"
+        # We must define CPU limits so the Auto-Scaler knows when the server is struggling
+        resources:
+          requests:
+            cpu: "250m"  # Standard idle CPU usage
+          limits:
+            cpu: "500m"  # Maximum allowed CPU usage

@@ -14,9 +14,9 @@ if (process.env.NODE_ENV === 'production') {
   redisUrl = process.env.REDIS_URL;
   console.log('Using Render Redis (production):', redisUrl);
 } else {
-  // Local development → use Memurai / local Redis
-  redisUrl = 'redis://127.0.0.1:6379';
-  console.log('Using local Redis (development):', redisUrl);
+  // Local development → use Memurai / local Redis or Docker Redis
+  redisUrl = process.env.REDIS_URL || 'redis://127.0.0.1:6379';
+  console.log('Using local/Docker Redis (development):', redisUrl);
 }
 
 const redisClient = redis.createClient({

@@ -6,8 +6,8 @@ if (process.env.NODE_ENV === "production") {
   redisUrl = process.env.REDIS_URL;
   console.log("Using Render Redis for BullMQ:", redisUrl);
 } else {
-  redisUrl = "redis://127.0.0.1:6379";
-  console.log("Using Local Redis for BullMQ:", redisUrl);
+  redisUrl = process.env.REDIS_URL || "redis://127.0.0.1:6379";
+  console.log("Using Local/Docker Redis for BullMQ:", redisUrl);
 }
 
 // FIX: Added maxRetriesPerRequest: null
