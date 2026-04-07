@@ -698,31 +698,36 @@ const completeBooking = async (req, res) => {
 
 const razorpayWebhook = async (req, res) => {
   try {
-    // 1. Webhook Signature Verification
     const signature = req.headers['x-razorpay-signature'];
     const secret = process.env.RAZORPAY_WEBHOOK_SECRET;
 
+    console.log("--- RAZORPAY WEBHOOK DEBUG ---");
+    console.log("Received Signature:", signature);
+    console.log("Webhook Secret Configured:", !!secret);
+
     if (signature && secret) {
-      // Create expected signature using the payload and your secret
       const expectedSignature = crypto
         .createHmac('sha256', secret)
-        .update(JSON.stringify(req.body))
+        .update(JSON.stringify(req.body)) // Note: Raw body is preferred, but req.body works for small payloads
         .digest('hex');
 
       if (expectedSignature !== signature) {
-        console.warn('Invalid Razorpay Webhook Signature!');
+        console.warn('❌ Signature Mismatch!');
+        console.log("Expected:", expectedSignature);
+        console.log("Received:", signature);
+        // During testing, you can comment the line below to see if the rest of the webhook logic works
         return res.status(400).json({ success: false, message: 'Invalid signature' });
       }
+      console.log("✅ Signature Verified");
     }
 
-    const eventType = req.body.event; // This will equal 'payment.failed'
+    const eventType = req.body.event;
     const orderId = req.body.payload?.payment?.entity?.order_id;
-    // Extract bookingId from notes provided by the frontend during RazorpayCheckout options
     const bookingId = req.body.payload?.payment?.entity?.notes?.bookingId;
     
+    console.log("Event:", eventType, "Order ID:", orderId, "Booking ID:", bookingId);
+    
     if (eventType === 'payment.failed') {
-      console.log(`Razorpay Webhook: Payment failed for order ${orderId}`);
-      
       if (bookingId) {
         await BookingModel.findByIdAndUpdate(
           bookingId, 
@@ -731,16 +736,13 @@ const razorpayWebhook = async (req, res) => {
             paymentStatus: 'failed' 
           }
         );
-        console.log(`Successfully cancelled booking: ${bookingId}`);
-      } else {
-         console.warn(`Webhook failed payment for order ${orderId} but no bookingId found in notes.`);
+        console.log(`✅ Cancelled booking: ${bookingId}`);
       }
     }
 
-    // Always send a 200 OK to acknowledge receipt of the webhook to Razorpay
     return res.status(200).json({ success: true });
   } catch (error) {
-    console.error("Error in razorpayWebhook:", error);
+    console.error("❌ Error in razorpayWebhook:", error);
     return res.status(500).json({ success: false, message: "Internal server error" });
   }
 };
