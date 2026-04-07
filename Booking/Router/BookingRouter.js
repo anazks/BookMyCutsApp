@@ -11,7 +11,7 @@ const UserModel = require('../../Auth/Model/UserModel');
 router.route('/getAvilablity/:barberId').get(checkAvailability)
 router.route('/BookNow').post(AddBooking)
 router.route('/myBookings').post(getMybooking) // Assuming this is for adding bookings
-router.route('/razorpay-webhook').post(razorpayWebhook)
+router.route('/webhook/razorpay').post(razorpayWebhook)
 
 
 

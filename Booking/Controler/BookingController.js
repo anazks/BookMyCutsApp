@@ -698,6 +698,23 @@ const completeBooking = async (req, res) => {
 
 const razorpayWebhook = async (req, res) => {
   try {
+    // 1. Webhook Signature Verification
+    const signature = req.headers['x-razorpay-signature'];
+    const secret = process.env.RAZORPAY_WEBHOOK_SECRET;
+
+    if (signature && secret) {
+      // Create expected signature using the payload and your secret
+      const expectedSignature = crypto
+        .createHmac('sha256', secret)
+        .update(JSON.stringify(req.body))
+        .digest('hex');
+
+      if (expectedSignature !== signature) {
+        console.warn('Invalid Razorpay Webhook Signature!');
+        return res.status(400).json({ success: false, message: 'Invalid signature' });
+      }
+    }
+
     const eventType = req.body.event; // This will equal 'payment.failed'
     const orderId = req.body.payload?.payment?.entity?.order_id;
     // Extract bookingId from notes provided by the frontend during RazorpayCheckout options
