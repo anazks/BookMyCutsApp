@@ -701,31 +701,35 @@ const razorpayWebhook = async (req, res) => {
     const signature = req.headers['x-razorpay-signature'];
     const secret = process.env.RAZORPAY_WEBHOOK_SECRET;
 
-    console.log("--- RAZORPAY WEBHOOK DEBUG ---");
-    console.log("Received Signature:", signature);
-    console.log("Webhook Secret Configured:", !!secret);
+    // Use req.rawBody if available, otherwise fallback to stringified body
+    const bodyToVerify = req.rawBody || JSON.stringify(req.body);
+
+    console.log("--- WEBHOOK ATTEMPT ---");
+    console.log("Signature present:", !!signature);
+    console.log("Secret present:", !!secret);
 
     if (signature && secret) {
       const expectedSignature = crypto
         .createHmac('sha256', secret)
-        .update(JSON.stringify(req.body)) // Note: Raw body is preferred, but req.body works for small payloads
+        .update(bodyToVerify)
         .digest('hex');
 
       if (expectedSignature !== signature) {
-        console.warn('❌ Signature Mismatch!');
-        console.log("Expected:", expectedSignature);
-        console.log("Received:", signature);
-        // During testing, you can comment the line below to see if the rest of the webhook logic works
-        return res.status(400).json({ success: false, message: 'Invalid signature' });
+        console.warn('❌ WEBHOOK ERROR: Signature Mismatch');
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Webhook verification failed: Signature mismatch',
+          debug: "Check RAZORPAY_WEBHOOK_SECRET in Render Environment Variables"
+        });
       }
-      console.log("✅ Signature Verified");
+      console.log("✅ WEBHOOK SUCCESS: Signature Verified");
     }
 
     const eventType = req.body.event;
     const orderId = req.body.payload?.payment?.entity?.order_id;
     const bookingId = req.body.payload?.payment?.entity?.notes?.bookingId;
     
-    console.log("Event:", eventType, "Order ID:", orderId, "Booking ID:", bookingId);
+    console.log(`Event: ${eventType} | Booking ID: ${bookingId}`);
     
     if (eventType === 'payment.failed') {
       if (bookingId) {
@@ -736,13 +740,13 @@ const razorpayWebhook = async (req, res) => {
             paymentStatus: 'failed' 
           }
         );
-        console.log(`✅ Cancelled booking: ${bookingId}`);
+        console.log(`✅ Booking ${bookingId} marked as failed/cancelled.`);
       }
     }
 
-    return res.status(200).json({ success: true });
+    return res.status(200).json({ success: true, message: "Webhook processed" });
   } catch (error) {
-    console.error("❌ Error in razorpayWebhook:", error);
+    console.error("❌ WEBHOOK SYSTEM ERROR:", error);
     return res.status(500).json({ success: false, message: "Internal server error" });
   }
 };
