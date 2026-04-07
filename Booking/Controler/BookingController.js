@@ -700,16 +700,24 @@ const razorpayWebhook = async (req, res) => {
   try {
     const eventType = req.body.event; // This will equal 'payment.failed'
     const orderId = req.body.payload?.payment?.entity?.order_id;
+    // Extract bookingId from notes provided by the frontend during RazorpayCheckout options
+    const bookingId = req.body.payload?.payment?.entity?.notes?.bookingId;
     
-    if (eventType === 'payment.failed' && orderId) {
+    if (eventType === 'payment.failed') {
       console.log(`Razorpay Webhook: Payment failed for order ${orderId}`);
-      await BookingModel.findOneAndUpdate(
-        { razorpayOrderId: orderId }, 
-        { 
-          bookingStatus: 'cancelled',
-          paymentStatus: 'failed' 
-        }
-      );
+      
+      if (bookingId) {
+        await BookingModel.findByIdAndUpdate(
+          bookingId, 
+          { 
+            bookingStatus: 'cancelled',
+            paymentStatus: 'failed' 
+          }
+        );
+        console.log(`Successfully cancelled booking: ${bookingId}`);
+      } else {
+         console.warn(`Webhook failed payment for order ${orderId} but no bookingId found in notes.`);
+      }
     }
 
     // Always send a 200 OK to acknowledge receipt of the webhook to Razorpay
