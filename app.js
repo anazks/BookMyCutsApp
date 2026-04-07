@@ -11,6 +11,15 @@ const cron = require('node-cron')
 
 app.use(cors())
 
+const os = require('os');
+app.use((req, res, next) => {
+    // This logs the unique ID of the specific Kubernetes Pod handling the request
+    if (req.url === '/' || req.url.startsWith('/api')) {
+        console.log(`[Pod ID: ${os.hostname()}] Handled -> ${req.method} ${req.url}`);
+    }
+    next();
+});
+
 const authRouter = require('./Auth/Routes/userRoute');
 const shopRouter = require('./Shops/Router/ShopRouter');
 const SlotRouter = require('./SlotManagement/SlotRouter/SlotRouter')
@@ -61,6 +70,28 @@ const scheduledJob = cron.schedule('0 0 */1 * *', async () => {
   scheduled: true, // Ensure the job is scheduled
   timezone: "UTC" // Set timezone explicitly
 });
+
+// Auto-cancel abandoned bookings every 5 minutes
+cron.schedule('*/5 * * * *', async () => {
+  try {
+      const expirationTime = new Date(Date.now() - 15 * 60 * 1000); // 15 minutes ago
+      const result = await Booking.updateMany({
+          bookingStatus: 'pending',
+          createdAt: { $lt: expirationTime }
+      }, {
+          $set: { 
+               bookingStatus: 'cancelled',
+               paymentStatus: 'unpaid'
+          }
+      });
+      if (result.modifiedCount > 0) {
+          console.log(`Auto-cancelled ${result.modifiedCount} abandoned pending bookings.`);
+      }
+  } catch (error) {
+      console.error("Error auto-cancelling abandoned bookings:", error);
+  }
+});
+
 
 // Optional: Start the job manually if needed
 // scheduledJob.start();

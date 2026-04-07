@@ -55,19 +55,16 @@ const createOrder = async (req, res) => {
       receipt: `receipt_${Date.now()}`
     };
 
-    console.log("Creating Razorpay Order with options:", options);
-    
+    // CHANGE THIS LINE: Use RazorPay instead of razorpayInstance
     const order = await RazorPay.orders.create(options);
-    
-    console.log("Razorpay Order Created Successfully:", order.id);
+
     res.status(200).json(order);
   } catch (err) {
-    console.error("RAZORPAY ORDER CREATION ERROR:", err);
+    console.log("FULL RAZORPAY ERROR:", JSON.stringify(err, null, 2));
+    console.error("Order Creation Error:", err);
     res.status(500).json({
       error: 'Order creation failed',
-      details: err.message,
-      code: err.code,
-      description: err.description
+      details: err.message
     });
   }
 }
@@ -204,21 +201,7 @@ const verifyPayment = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Booking not found' });
     }
 
-    // --- CREATE PAYOUT RECORD (Unified: Haircut Earning) ---
-    try {
-        // As per user: "if 100 is haircut charge, platform fee is 15, shop owner gets 85"
-        // We do NOT add 5 on top. The 5 is part of the 85 for reporting purposes.
-        await PayoutRequest.create({
-            shopOwnerId: updatedBooking.shopOwnerId,
-            amount: payoutAmount,
-            bookingIds: [updatedBooking._id],
-            status: 'pending',
-            type: 'earning'
-        });
-        console.log(`[Payout] Created PayoutRequest for Booking: ${bookingId} (Amount: ${payoutAmount})`);
-    } catch (payoutError) {
-        console.error('Payout Record Creation Error:', payoutError);
-    }
+    // --- TRIGGER QUEUE START ---
     // We trigger the payout queue only if money was actually received
     // try {
     //   await payoutQueue.add(
@@ -713,6 +696,28 @@ const completeBooking = async (req, res) => {
   }
 };
 
-module.exports = { completeBooking, getbookings, findShopByService, fetchUpComeingBooking, checkAvailability, AddBooking, getMybooking, createOrder, findDashboardIncome, verifyPayment, barberFreeSlots, fetchAllAvailableTimeSlots, fetchAllbookings }
+const razorpayWebhook = async (req, res) => {
+  try {
+    const eventType = req.body.event; // This will equal 'payment.failed'
+    const orderId = req.body.payload?.payment?.entity?.order_id;
+    
+    if (eventType === 'payment.failed' && orderId) {
+      console.log(`Razorpay Webhook: Payment failed for order ${orderId}`);
+      await BookingModel.findOneAndUpdate(
+        { razorpayOrderId: orderId }, 
+        { 
+          bookingStatus: 'cancelled',
+          paymentStatus: 'failed' 
+        }
+      );
+    }
 
+    // Always send a 200 OK to acknowledge receipt of the webhook to Razorpay
+    return res.status(200).json({ success: true });
+  } catch (error) {
+    console.error("Error in razorpayWebhook:", error);
+    return res.status(500).json({ success: false, message: "Internal server error" });
+  }
+};
 
+module.exports = { razorpayWebhook, completeBooking, getbookings, findShopByService, fetchUpComeingBooking, checkAvailability, AddBooking, getMybooking, createOrder, findDashboardIncome, verifyPayment, barberFreeSlots, fetchAllAvailableTimeSlots, fetchAllbookings }

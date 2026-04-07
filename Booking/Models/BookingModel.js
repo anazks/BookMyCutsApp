@@ -77,9 +77,12 @@ const bookingSchema = new mongoose.Schema({
     type:String,
     default:"not added"
   },
+  razorpayOrderId: {
+    type: String,
+  },
   paymentStatus: {
     type: String,
-    enum: ['unpaid', 'partial', 'paid', 'refunded'],
+    enum: ['unpaid', 'partial', 'paid', 'refunded','failed'],
     default: 'unpaid'
   },
   amountPaid: {
