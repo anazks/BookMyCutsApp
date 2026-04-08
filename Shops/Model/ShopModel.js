@@ -75,6 +75,11 @@
       },
       isActive:{
         type: Boolean
+      },
+      targetAudience: {
+        type: [String], 
+        enum: ['men', 'women', 'kids'], 
+        validate: [v => v.length > 0, 'Shop must belong to at least one category']
       }
     },
     { timestamps: true }

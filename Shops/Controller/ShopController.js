@@ -1588,7 +1588,47 @@ const createAsBarber = async (req, res) => {
 
 
 
+const migrateShopAudience = asyncHandler(async (req, res) => {
+    try {
+        const shops = await ShopModel.find({
+            $or: [
+                { targetAudience: { $exists: false } },
+                { targetAudience: { $size: 0 } }
+            ]
+        });
+
+        console.log(`Found ${shops.length} shops needing migration.`);
+
+        const audiences = ['men', 'women', 'kids'];
+        let updatedCount = 0;
+
+        for (const shop of shops) {
+            // Pick a random audience
+            const randomAudience = [audiences[Math.floor(Math.random() * audiences.length)]];
+            shop.targetAudience = randomAudience;
+            await shop.save();
+            updatedCount++;
+        }
+
+        return res.status(200).json({
+            success: true,
+            message: `Migration completed. Updated ${updatedCount} shops with random targetAudience.`,
+            updatedCount
+        });
+    } catch (error) {
+        console.error("Migration Error:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Migration failed",
+            error: error.message
+        });
+    }
+});
+
+
+
 module.exports = {
+    migrateShopAudience,
     createAsBarber,
     delService,
     viewService,

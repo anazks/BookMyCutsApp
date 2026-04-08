@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const multer = require('multer')
-const {fetchBookingsByShop,viewMyshop,viewSingleShopBarbers,viewSingleShopService,myprofile,viewAllBookingOfShops,myShopProfile,AddShop,ViewAllShop,addService,ViewAllServices,addBarber,ViewAllBarbers,viewSigleShop,viewMyService,viewMyBarbers,updateBarber, deleteBarber,createPremiumOrder, verifyPremiumAndUpgrade, getAllPremiumShops, saveBankDetails, viewbankDetails, deleteBankDetails, upadateBankdetails,editService, deleteService,findNearByShops,deleteShop,addProfileImage,deleteMedia,updateMediaDetails,search,fetchAllUniqueService,filterShopsByService,viewAllService,editShop,getShop, fetchServicebyShop, fetchBarbersbyShop,viewService,delService,createAsBarber } = require('../Controller/ShopController')
+const {migrateShopAudience, fetchBookingsByShop,viewMyshop,viewSingleShopBarbers,viewSingleShopService,myprofile,viewAllBookingOfShops,myShopProfile,AddShop,ViewAllShop,addService,ViewAllServices,addBarber,ViewAllBarbers,viewSigleShop,viewMyService,viewMyBarbers,updateBarber, deleteBarber,createPremiumOrder, verifyPremiumAndUpgrade, getAllPremiumShops, saveBankDetails, viewbankDetails, deleteBankDetails, upadateBankdetails,editService, deleteService,findNearByShops,deleteShop,addProfileImage,deleteMedia,updateMediaDetails,search,fetchAllUniqueService,filterShopsByService,viewAllService,editShop,getShop, fetchServicebyShop, fetchBarbersbyShop,viewService,delService,createAsBarber } = require('../Controller/ShopController')
 const {uploadMedia}  = require('../../Shops/CloudStorageCurds/CloudCurds')
 const upload = require('../../Cloudinary/MulterConfig')
 const WorkingHoursRoutes = require('../Router/WorkingHoursRoutes');
@@ -103,6 +103,8 @@ const cities = await City.aggregate([
     });
   }
 });
+
+router.post('/debug/migrate-audience', migrateShopAudience);
 
 
  
