@@ -6,6 +6,7 @@ const RazorPay = require('../../Razorpay/RazorpayConfig')
 const mongoose = require('mongoose');
 const { trace } = require('../Router/BookingRouter');
 const crypto = require('crypto'); // CommonJS
+const RazorpayClass = require('razorpay'); // Import the class for static methods
 const BookingModel = require('../Models/BookingModel');
 const ShopModel = require('../../Shops/Model/ShopModel')
 const PayoutRequest = require('../../Shops/Model/PayoutRequest');
@@ -700,47 +701,73 @@ const razorpayWebhook = async (req, res) => {
   try {
     const signature = req.headers['x-razorpay-signature'];
     const secret = process.env.RAZORPAY_WEBHOOK_SECRET;
+    
+    // Ensure we have the raw body for verification
+    const bodyToVerify = req.rawBody;
 
-    // Use req.rawBody if available, otherwise fallback to stringified body
-    const bodyToVerify = req.rawBody || JSON.stringify(req.body);
+    console.log("--- RAZORPAY WEBHOOK ATTEMPT ---");
+    console.log("Signature Header:", !!signature);
+    console.log("Webhook Secret Valid:", !!secret);
+    console.log("Raw Body Available:", !!bodyToVerify);
 
-    console.log("--- WEBHOOK ATTEMPT ---");
-    console.log("Signature present:", !!signature);
-    console.log("Secret present:", !!secret);
-
-    if (signature && secret) {
-      const expectedSignature = crypto
-        .createHmac('sha256', secret)
-        .update(bodyToVerify)
-        .digest('hex');
-
-      if (expectedSignature !== signature) {
-        console.warn('❌ WEBHOOK ERROR: Signature Mismatch');
-        return res.status(400).json({ 
-          success: false, 
-          message: 'Webhook verification failed: Signature mismatch',
-          debug: "Check RAZORPAY_WEBHOOK_SECRET in Render Environment Variables"
-        });
+    if (!signature || !secret) {
+      if (!secret) {
+        console.warn("⚠️ WEBHOOK WARNING: No RAZORPAY_WEBHOOK_SECRET found. Skipping signature verification (INSECURE MODE).");
+      } else if (!signature) {
+        console.warn("❌ WEBHOOK ERROR: Signature missing from headers but secret is configured.");
+        return res.status(400).json({ success: false, message: "Missing signature" });
       }
-      console.log("✅ WEBHOOK SUCCESS: Signature Verified");
+    } else {
+      // VERIFICATION LOGIC
+      if (!bodyToVerify) {
+        console.error("❌ WEBHOOK ERROR: req.rawBody is missing. Verification might fail.");
+        const fallbackBody = JSON.stringify(req.body);
+        try {
+          const isValid = RazorpayClass.validateWebhookSignature(fallbackBody, signature, secret);
+          if (!isValid) throw new Error("Signature mismatch with fallback");
+          console.log("✅ WEBHOOK SUCCESS: Verified using fallback stringify");
+        } catch (err) {
+          console.error("❌ WEBHOOK ERROR: Signature Mismatch (Raw body missing)", err.message);
+          return res.status(400).json({ success: false, message: "Verification failed (Signature Mismatch)" });
+        }
+      } else {
+        try {
+          const isValid = RazorpayClass.validateWebhookSignature(bodyToVerify, signature, secret);
+          if (!isValid) {
+            console.warn('❌ WEBHOOK ERROR: Signature Mismatch');
+            return res.status(400).json({ success: false, message: 'Webhook verification failed: Signature mismatch' });
+          }
+          console.log("✅ WEBHOOK SUCCESS: Signature Verified");
+        } catch (err) {
+          console.error("❌ WEBHOOK ERROR during signature check:", err.message);
+          return res.status(400).json({ success: false, message: "Signature verification error" });
+        }
+      }
     }
 
+    // Process event
     const eventType = req.body.event;
-    const orderId = req.body.payload?.payment?.entity?.order_id;
     const bookingId = req.body.payload?.payment?.entity?.notes?.bookingId;
     
-    console.log(`Event: ${eventType} | Booking ID: ${bookingId}`);
+    console.log(`Event Type: ${eventType} | Booking ID: ${bookingId}`);
     
     if (eventType === 'payment.failed') {
       if (bookingId) {
-        await BookingModel.findByIdAndUpdate(
+        const updated = await BookingModel.findByIdAndUpdate(
           bookingId, 
           { 
             bookingStatus: 'cancelled',
             paymentStatus: 'failed' 
-          }
+          },
+          { new: true }
         );
-        console.log(`✅ Booking ${bookingId} marked as failed/cancelled.`);
+        if (updated) {
+          console.log(`✅ Booking ${bookingId} successfully marked as FAILED/CANCELLED.`);
+        } else {
+          console.warn(`⚠️ Webhook received for booking ${bookingId} but it was not found in DB.`);
+        }
+      } else {
+        console.warn("⚠️ Webhook 'payment.failed' received but no bookingId found in notes.");
       }
     }
 
