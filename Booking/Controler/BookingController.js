@@ -707,7 +707,11 @@ const razorpayWebhook = async (req, res) => {
 
     console.log("--- RAZORPAY WEBHOOK ATTEMPT ---");
     console.log("Signature Header:", !!signature);
-    console.log("Webhook Secret Valid:", !!secret);
+    console.log("Webhook Secret Valid:", !!secret && secret.length > 0);
+    if (secret) {
+        console.log(`Webhook Secret Length: ${secret.length}`);
+        console.log(`Webhook Secret starts with: ${secret.substring(0, 3)}... and ends with: ...${secret.substring(secret.length - 3)}`);
+    }
     console.log("Raw Body Available:", !!bodyToVerify);
 
     if (!signature || !secret) {
