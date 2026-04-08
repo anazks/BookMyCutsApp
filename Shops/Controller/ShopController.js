@@ -1605,8 +1605,12 @@ const migrateShopAudience = asyncHandler(async (req, res) => {
         for (const shop of shops) {
             // Pick a random audience
             const randomAudience = [audiences[Math.floor(Math.random() * audiences.length)]];
-            shop.targetAudience = randomAudience;
-            await shop.save();
+            
+            // Use updateOne to bypass validation of other fields (like incomplete media)
+            await ShopModel.updateOne(
+                { _id: shop._id },
+                { $set: { targetAudience: randomAudience } }
+            );
             updatedCount++;
         }
 
