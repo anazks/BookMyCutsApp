@@ -24,6 +24,7 @@ const authRouter = require('./Auth/Routes/userRoute');
 const shopRouter = require('./Shops/Router/ShopRouter');
 const SlotRouter = require('./SlotManagement/SlotRouter/SlotRouter')
 const BookingRouter = require('./Booking/Router/BookingRouter')
+const OfferRouter = require('./Offers/Router/OfferRouter');
 const setupSwagger = require('./swaggerDocs/swaggerConfig');
 const checkExpiredPremium = require('./Shops/ShopScheduler/Scheduler');
 const { seedKeralaCities } = require('./Auth/Controllers/seedCities');
@@ -53,6 +54,7 @@ app.use('/api/auth', authRouter)
 app.use('/api/shop', shopRouter)
 app.use('/api/slot', SlotRouter)
 app.use('/api/booking', BookingRouter)
+app.use('/api/offers', OfferRouter)
 
 // Fixed cron job - runs every 10 minutes
 const scheduledJob = cron.schedule('0 0 */1 * *', async () => {

@@ -62,6 +62,15 @@ const bookingSchema = new mongoose.Schema({
   amountToPay: Number,
   remainingAmount: Number,
   currency: String,
+  appliedOffer: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Offer'
+  },
+  discountAmount: {
+    type: Number,
+    default: 0
+  },
+  basePrice: Number, // Original price before discount
 
   bookingTimestamp: {
     type: Date,

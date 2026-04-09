@@ -10,6 +10,7 @@ const RazorpayClass = require('razorpay'); // Import the class for static method
 const BookingModel = require('../Models/BookingModel');
 const ShopModel = require('../../Shops/Model/ShopModel')
 const PayoutRequest = require('../../Shops/Model/PayoutRequest');
+const Offer = require('../../Offers/Model/Offer');
 
 
 
@@ -44,22 +45,52 @@ const AddBooking = async (req, res) => {
 
 const createOrder = async (req, res) => {
   try {
-    const { amount } = req.body;
+    const { amount, offerId, shopId } = req.body;
 
     if (!amount) {
       return res.status(400).json({ error: "Amount is required" });
     }
 
+    let finalAmount = amount;
+    let discountAmount = 0;
+
+    // Apply Shop Discount if offerId is provided
+    if (offerId) {
+      const offer = await Offer.findById(offerId);
+      
+      if (offer && offer.isActive && offer.offerType === 'discount' && new Date() <= offer.validUntil) {
+        // Double check it belongs to the shop if it's a shop-level offer
+        if (offer.offerLevel === 'shop' && offer.shopId.toString() !== shopId) {
+          console.warn("⚠️ Offer-Shop mismatch. Ignoring discount.");
+        } else {
+          // Calculate discount
+          if (offer.discountType === 'percentage') {
+            discountAmount = (amount * offer.discountValue) / 100;
+          } else {
+            discountAmount = offer.discountValue;
+          }
+          finalAmount = Math.max(amount - discountAmount, 0);
+          console.log(`✅ Applied Offer: ${offer.title} | Discount: ₹${discountAmount}`);
+        }
+      } else {
+        console.warn("⚠️ Invalid or expired offer attempted.");
+      }
+    }
+
     const options = {
-      amount: Math.round(amount * 100),
+      amount: Math.round(finalAmount * 100),
       currency: 'INR',
       receipt: `receipt_${Date.now()}`
     };
 
-    // CHANGE THIS LINE: Use RazorPay instead of razorpayInstance
     const order = await RazorPay.orders.create(options);
 
-    res.status(200).json(order);
+    res.status(200).json({
+      ...order,
+      originalAmount: amount,
+      discountAmount,
+      finalAmount
+    });
   } catch (err) {
     console.log("FULL RAZORPAY ERROR:", JSON.stringify(err, null, 2));
     console.error("Order Creation Error:", err);
