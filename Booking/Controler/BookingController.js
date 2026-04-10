@@ -77,8 +77,13 @@ const createOrder = async (req, res) => {
       }
     }
 
+    const platformFee = 20;
+    // The incoming 'amount' already includes the fee, so we don't add it again.
+    // However, we calculate it here for the response breakout.
+    const amountToPay = finalAmount; 
+
     const options = {
-      amount: Math.round(finalAmount * 100),
+      amount: Math.round(amountToPay * 100),
       currency: 'INR',
       receipt: `receipt_${Date.now()}`
     };
@@ -87,9 +92,11 @@ const createOrder = async (req, res) => {
 
     res.status(200).json({
       ...order,
-      originalAmount: amount,
+      originalServiceAmount: amount,
       discountAmount,
-      finalAmount
+      platformFee,
+      amountToPay,
+      finalAmount: amountToPay // The actual amount charged to Razorpay
     });
   } catch (err) {
     console.log("FULL RAZORPAY ERROR:", JSON.stringify(err, null, 2));
@@ -210,10 +217,26 @@ const verifyPayment = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Invalid signature' });
     }
 
-    // Update booking
-    const remainingAmount = paymentType === 'full' ? 0 : Math.max((req.body.totalPrice || amount) - amount, 0);
-    const platformFee = 15;
-    const payoutAmount = Math.max(Number(amount) - platformFee, 0);
+    // --- FETCH BOOKING TO GET PRICE ---
+    const booking = await BookingModel.findById(bookingId);
+    if (!booking) {
+      return res.status(404).json({ success: false, message: 'Booking not found' });
+    }
+
+    const platformFeeTotal = 20;
+    const companyShare = 15;
+    const salonBonus = 5;
+    
+    // totalServicePrice is what the customer paid minus the platform fee
+    // Note: 'amount' here includes the platform fee
+    const currentAmountPaid = Number(amount);
+    const totalServicePrice = currentAmountPaid - platformFeeTotal;
+    const salonPayoutAmount = totalServicePrice + salonBonus;
+
+    // Calculate remainingAmount based on DB totalPrice
+    const remainingAmount = paymentType === 'full' 
+      ? 0 
+      : Math.max((booking.totalPrice || 0) - totalServicePrice, 0);
 
     const updatedBooking = await BookingModel.findByIdAndUpdate(
       bookingId,
@@ -224,7 +247,11 @@ const verifyPayment = async (req, res) => {
         remainingAmount,
         paymentStatus: paymentType === 'full' ? 'paid' : 'partial',
         bookingStatus: 'confirmed',
-        salonPayoutAmount: payoutAmount
+        platformFee: platformFeeTotal,
+        companyShare: companyShare,
+        salonBonus: salonBonus,
+        salonServicePrice: totalServicePrice,
+        salonPayoutAmount: salonPayoutAmount
       },
       { new: true, lean: true }
     );
@@ -232,6 +259,23 @@ const verifyPayment = async (req, res) => {
     if (!updatedBooking) {
       return res.status(404).json({ success: false, message: 'Booking not found' });
     }
+
+    // CREATE LEDGER ENTRY (PayoutRequest)
+    // We check if an earning already exists for this booking to prevent duplicates
+    const existingEarning = await PayoutRequest.findOne({ bookingIds: bookingId, type: 'earning' });
+    if (!existingEarning) {
+      await PayoutRequest.create({
+        shopOwnerId: updatedBooking.shopOwnerId,
+        amount: salonPayoutAmount,
+        serviceAmount: totalServicePrice,
+        bonusAmount: salonBonus,
+        bookingIds: [bookingId],
+        type: 'earning',
+        status: 'pending'
+      });
+      console.log(`✅ Ledger Entry Created: ₹${salonPayoutAmount} added to balance for ShopOwner ${updatedBooking.shopOwnerId}`);
+    }
+    // --- PAYOUT & LEDGER LOGIC END ---
 
     // --- TRIGGER QUEUE START ---
     // We trigger the payout queue only if money was actually received

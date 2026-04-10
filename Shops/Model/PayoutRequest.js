@@ -11,6 +11,14 @@ const PayoutRequestSchema = new mongoose.Schema(
       type: Number,
       required: true,
     },
+    serviceAmount: {
+      type: Number,
+      default: 0
+    },
+    bonusAmount: {
+      type: Number,
+      default: 0
+    },
     bookingIds: [
       {
         type: mongoose.Schema.Types.ObjectId,

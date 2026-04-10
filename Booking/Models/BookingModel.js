@@ -102,6 +102,10 @@ const bookingSchema = new mongoose.Schema({
   type: Number,
   default: 20
 },
+companyShare: {
+  type: Number,
+  default: 15
+},
 
 salonBonus: {
   type: Number,
@@ -110,6 +114,10 @@ salonBonus: {
 
 salonPayoutAmount: {
   type: Number
+},
+salonServicePrice: {
+  type: Number,
+  default: 0
 },
 
 payoutStatus: {

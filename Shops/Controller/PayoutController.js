@@ -175,8 +175,8 @@ const getEarningsSummary = async (req, res) => {
       }
       // PENDING EARNINGS: Individual earnings ready to be withdrawn
       else if (p.type === 'earning' && p.status === 'pending') {
-        totalPendingAmount += (p.amount || 0);
-        totalPendingBonus += 5; 
+        totalPendingAmount += (p.serviceAmount || 0);
+        totalPendingBonus += (p.bonusAmount || 0);
       }
       // PENDING WITHDRAWALS: Requests already submitted but not yet in bank
       else if (p.type === 'withdrawal' && (p.status === 'pending' || p.status === 'processing')) {

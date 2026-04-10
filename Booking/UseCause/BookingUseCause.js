@@ -269,6 +269,10 @@ module.exports.bookNow = async (data, decodedValue) => {
           : "unpaid",
 
       amountPaid: data.paymentType === "advance" ? data.amountToPay : 0,
+      platformFee: 20,
+      companyShare: 15,
+      salonBonus: 5,
+      salonServicePrice: data.paymentType === "advance" ? Math.max(data.amountToPay - 20, 0) : 0,
       salonPayoutAmount: data.paymentType === "advance" ? Math.max(data.amountToPay - 15, 0) : 0,
 
       createdAt: new Date()
