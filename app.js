@@ -48,7 +48,7 @@ app.use(express.json({
 app.use(express.urlencoded({ extended: true }));
 
 // Define the port
-const port = 3002;
+const port = 3002
 
 app.use('/api/auth', authRouter)
 app.use('/api/shop', shopRouter)

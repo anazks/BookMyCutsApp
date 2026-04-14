@@ -33,7 +33,7 @@ router.route('/shop-owner/:id').get(fetchUser)
 router.route('/shop-owner/:id').delete(removeShopOwner)
 router.route('/shop-owner/:id').put(updateShopOwner)
 
-router.route('/user/google-sigin').post(userGoogleSignin)
+router.route('/user/google-signin').post(userGoogleSignin)
 
 router.route('/admin-registration').post(AdminRegistration)
 router.route('/admin-login').post(adminLogin)
