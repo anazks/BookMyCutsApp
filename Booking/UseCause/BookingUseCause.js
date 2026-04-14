@@ -233,6 +233,16 @@ module.exports.bookNow = async (data, decodedValue) => {
   console.log("✅ shop Data",shopData)
   console.log("✅ Shop ID:", shopId);
   console.log("✅ Owner ID:", shopOwnerId);
+    // Calculate salonServiceCharge (Sum of individual service prices)
+    const salonServiceCharge = data.services?.reduce((sum, s) => sum + (Number(s.price) || 0), 0) || 0;
+
+    // Determine who collects the service fee
+    // FULL: Platform collects everything.
+    // ADVANCE/COD: Shop owner collects the service fee in cash.
+    const collectedBy = data.paymentType === 'full' ? 'platform' : 'shop';
+
+    console.log(`💰 Financial Detail: ServiceTotal=${salonServiceCharge} | CollectedBy=${collectedBy}`);
+
     // Step 3: Prepare booking data
     const bookingData = {
       barberId: new mongoose.Types.ObjectId(data.barberId),
@@ -258,20 +268,26 @@ module.exports.bookNow = async (data, decodedValue) => {
 
       paymentType: data.paymentType,
       amountToPay: data.amountToPay,
-      remainingAmount: data.remainingAmount,
+      // Calculate remainingAmount on server: Total Price - Amount Paid upfront
+      remainingAmount: data.paymentType === "advance" 
+        ? Math.max(data.totalPrice - data.amountToPay, 0) 
+        : (data.paymentType === 'full' ? 0 : data.totalPrice),
       currency: data.currency,
 
       bookingTimestamp: new Date(),
       bookingStatus: "pending",
       paymentStatus:
         data.paymentType === "advance"
-          ? (data.remainingAmount > 0 ? "partial" : "paid")
-          : "unpaid",
+          ? "partial"
+          : (data.paymentType === 'full' ? 'paid' : 'unpaid'),
 
       amountPaid: data.paymentType === "advance" ? data.amountToPay : 0,
       platformFee: 20,
       companyShare: 15,
       salonBonus: 5,
+      salonServiceCharge: salonServiceCharge,
+      collectedBy: collectedBy,
+      // Initial breakout (will be finalized in verifyPayment)
       salonServicePrice: data.paymentType === "advance" ? Math.max(data.amountToPay - 20, 0) : 0,
       salonPayoutAmount: data.paymentType === "advance" ? Math.max(data.amountToPay - 15, 0) : 0,
 

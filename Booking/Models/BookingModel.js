@@ -119,6 +119,15 @@ salonServicePrice: {
   type: Number,
   default: 0
 },
+salonServiceCharge: {
+  type: Number,
+  default: 0
+},
+collectedBy: {
+  type: String,
+  enum: ['platform', 'shop'],
+  default: 'shop'
+},
 
 payoutStatus: {
   type: String,

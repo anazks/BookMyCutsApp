@@ -389,15 +389,15 @@ const forgotPassword = async (req, res) => {
     try {
       if (mobileNo && mobileNo.trim()) {
         // Implement SMS sending here when ready
-        // await sendOtpViaSms(mobileNo, otp);
+        // sendOtpViaSms(mobileNo, otp).catch(e => console.error(e));
         console.log(`[SMS OTP] → ${mobileNo} : ${otp}`);
       } else {
-        // Your existing email function (assumed to exist)
-        await sendForgotPasswordOtp(email, otp, OTP_VALIDITY_MINUTES);
+        // Run in background without awaiting to prevent API delay
+        sendForgotPasswordOtp(email, otp, OTP_VALIDITY_MINUTES)
+          .catch((sendErr) => console.error('OTP delivery failed in background:', sendErr));
       }
-    } catch (sendErr) {
-      console.error('OTP delivery failed:', sendErr);
-      // IMPORTANT: still return success → don't leak failure to attacker
+    } catch (setupErr) {
+      console.error('OTP setup failed:', setupErr);
     }
 
     return res.status(200).json(genericSuccess);
@@ -705,25 +705,32 @@ const adminLogin = asyncHandler(async (req, res) => {
 
 async function getNearbyCitiesController(req, res) {
   try {
-    const { lat, lon } = req.query; // or req.body, or from auth/jwt location
+    const { lat, lng } = req.query; // corrected here
 
-    if (!lat || !lon) {
-      return res.status(400).json({ success: false, message: 'lat and lon are required' });
+    if (!lat || !lng) {
+      return res.status(400).json({
+        success: false,
+        message: 'lat and lng are required'
+      });
     }
 
     const userLat = parseFloat(lat);
-    const userLon = parseFloat(lon);
+    const userLng = parseFloat(lng);
 
-    const nearbyCities = await getNearestCities(userLat, userLon, 8);
+    const nearbyCities = await getNearestCities(userLat, userLng, 8);
 
     res.json({
       success: true,
       count: nearbyCities.length,
-      userLocation: { lat: userLat, lon: userLon },
+      userLocation: { lat: userLat, lng: userLng },
       data: nearbyCities
     });
   } catch (error) {
-    res.status(500).json({ success: false, message: 'Server error', error: error.message });
+    res.status(500).json({
+      success: false,
+      message: 'Server error',
+      error: error.message
+    });
   }
 }
 

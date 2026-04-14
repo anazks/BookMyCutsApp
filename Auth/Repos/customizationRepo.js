@@ -2,18 +2,13 @@ const CustomizationModel = require('../Model/CustomizationModel');
 
 module.exports.createCustomization = async (data) => {
     try {
-        // Attempt to drop the old shopId index to prevent E11000 duplicate key errors
-        try {
-            await CustomizationModel.collection.dropIndex('shopId_1');
-        } catch (e) {
-            // Ignore if index doesn't exist
-        }
+        const screen = data.screen || 'home';
 
-        // Maintain only one single global civilization document via upsert
+        // Maintain one document per screen type via upsert
         const customization = await CustomizationModel.findOneAndUpdate(
-            {}, 
+            { screen: screen }, 
             { $set: data },
-            { new: true, upsert: true } // Create if missing, otherwise update the existing single doc
+            { new: true, upsert: true } 
         );
         return customization;
     } catch (error) {
@@ -22,10 +17,23 @@ module.exports.createCustomization = async (data) => {
     }
 };
 
-module.exports.getCustomization = async () => {
+module.exports.getCustomization = async (screen = 'home') => {
     try {
-        // Since there is no shopId, we just fetch the first/only document
-        const customization = await CustomizationModel.findOne();
+        // 1. Try to find the document specifically for this screen
+        let customization = await CustomizationModel.findOne({ screen: screen });
+
+        // 2. SELF-HEALING FALLBACK: If we are looking for 'home' and didn't find it,
+        // it might be an old document without the 'screen' field.
+        if (!customization && screen === 'home') {
+            customization = await CustomizationModel.findOne(); // Fetch any existing one
+            if (customization) {
+                // Update it so it won't be "lost" again
+                customization.screen = 'home';
+                await customization.save();
+                console.log('✅ Migrated legacy customization to "home" screen');
+            }
+        }
+
         return customization;
     } catch (error) {
         console.error('Error fetching customization:', error);

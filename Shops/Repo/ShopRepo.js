@@ -151,7 +151,7 @@ module.exports.getMyBarbers = async(id)=>{
 module.exports.getAllBookingsOfShop = async (
   shopOwnerId,
   page = 1,
-  limit = 10,
+  limit = 25,
   status = null
 ) => {
   try {
@@ -162,34 +162,30 @@ module.exports.getAllBookingsOfShop = async (
     ).lean();
 
     if (!shops.length) {
-      return { bookings: [], total: 0, stats: { total: 0, completed: 0, confirmed: 0, pending: 0 } };
+      return { 
+        bookings: [], 
+        total: 0, 
+        stats: { total: 0, completed: 0, confirmed: 0, pending: 0, cancelled: 0 } 
+      };
     }
 
     const shopIds = shops.map(shop => shop._id);
     const skip = (page - 1) * limit;
+    const now = new Date();
     
     // Build the query
     const query = { shopId: { $in: shopIds } };
 
-    // If status is provided, filter by it
-    if (status) {
-      query.bookingStatus = status;
-      
-      // For 'completed' or 'cancelled', we usually want to see history, 
-      // so we don't apply the 'upcoming' filter.
-      // For 'pending' or 'confirmed', we keep the upcoming filter to avoid clutter.
-      if (status === 'pending' || status === 'confirmed') {
-        const startOfToday = new Date();
-        startOfToday.setHours(0, 0, 0, 0);
-        query["timeSlot.startingTime"] = { $gte: startOfToday };
-      }
-    } else {
-      // Default behavior: All upcoming non-cancelled bookings
-      const startOfToday = new Date();
-      startOfToday.setHours(0, 0, 0, 0);
-      query["timeSlot.startingTime"] = { $gte: startOfToday };
+    // Handle status / filtering logic
+    if (status === 'upcoming') {
+      // Precise Upcoming Filter: Hide bookings that have already started
+      query["timeSlot.startingTime"] = { $gte: now };
       query.bookingStatus = { $ne: 'cancelled' };
-    }
+    } else if (status && status !== 'all') {
+      // Specific status filter (pending, confirmed, etc.)
+      query.bookingStatus = status;
+    } 
+    // If status is null or 'all', we show everything (Default behavior)
 
     // 2️⃣ Fetch bookings with pagination and 3️⃣ statistics
     const [bookings, totalCount, stats] = await Promise.all([
@@ -197,26 +193,20 @@ module.exports.getAllBookingsOfShop = async (
         .populate("userId", "firstName")
         .populate("barberId", "BarberName")
         .populate("shopId", "shopName")
-        .sort({ "timeSlot.startingTime": status === 'completed' || status === 'cancelled' ? -1 : 1 }) // Descending for history
+        .sort(status === 'upcoming' 
+          ? { "timeSlot.startingTime": 1 } 
+          : { createdAt: -1 }
+        ) // Soonest first for upcoming, most recently booked first for history
         .skip(skip)
         .limit(limit)
         .lean(),
 
       BookingModel.countDocuments(query),
 
-      // Statistics across for these shops based on the current date/status filter context
+      // 📊 GLOBAL STATISTICS (Lifetime totals for the shop owner)
       (async () => {
-        // Base query for stats should follow the same time constraint as the list 
-        // to keep the numbers consistent for the shop owner.
         const statsQuery = { shopId: { $in: shopIds } };
         
-        // If not viewing history (completed/cancelled), apply upcoming filter to stats too
-        if (!status || (status !== 'completed' && status !== 'cancelled')) {
-           const startOfToday = new Date();
-           startOfToday.setHours(0, 0, 0, 0);
-           statsQuery["timeSlot.startingTime"] = { $gte: startOfToday };
-        }
-
         const [total, completed, confirmed, pending, cancelled] = await Promise.all([
           BookingModel.countDocuments(statsQuery),
           BookingModel.countDocuments({ ...statsQuery, bookingStatus: 'completed' }),
@@ -224,6 +214,7 @@ module.exports.getAllBookingsOfShop = async (
           BookingModel.countDocuments({ ...statsQuery, bookingStatus: 'pending' }),
           BookingModel.countDocuments({ ...statsQuery, bookingStatus: 'cancelled' })
         ]);
+
         return { total, completed, confirmed, pending, cancelled };
       })()
     ]);
@@ -232,7 +223,11 @@ module.exports.getAllBookingsOfShop = async (
 
   } catch (error) {
     console.error("Error in getAllBookingsOfShop:", error);
-    return { bookings: [], total: 0, stats: { total: 0, completed: 0, confirmed: 0, pending: 0 } };
+    return { 
+      bookings: [], 
+      total: 0, 
+      stats: { total: 0, completed: 0, confirmed: 0, pending: 0, cancelled: 0 } 
+    };
   }
 };
 

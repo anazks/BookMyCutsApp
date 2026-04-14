@@ -260,16 +260,10 @@ const fetchBankDetails = async (req, res) => {
       return res.status(404).json({ success: false, message: "Bank details not found for this shop owner" });
     }
 
-    // Mask account number for security
-    const maskedNumber = "****" + account.accountNumber.toString().slice(-4);
-
     return res.status(200).json({
       success: true,
       message: "Bank details fetched successfully",
-      account: {
-        ...account.toObject(),
-        accountNumber: maskedNumber,
-      },
+      account: account,
     });
 
   } catch (error) {

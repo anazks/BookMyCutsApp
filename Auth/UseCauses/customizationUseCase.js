@@ -39,9 +39,9 @@ module.exports.createCustomizationUseCase = async (data, imageFile) => {
     }
 };
 
-module.exports.getCustomizationUseCase = async () => {
+module.exports.getCustomizationUseCase = async (screen) => {
     try {
-        const customization = await getCustomization();
+        const customization = await getCustomization(screen);
         return customization;
     } catch (error) {
         console.error('Error in getCustomizationUseCase:', error);

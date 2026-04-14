@@ -450,11 +450,11 @@ const viewAllBookingOfShops = asyncHandler(async (req, res) => {
         const tokenData = await Decoder(token);
 
         const page = parseInt(req.query.page) || 1;
-        const limit = parseInt(req.query.limit) || 10;
+        const limit = parseInt(req.query.limit) || 25;
         const status = req.query.status;
 
         // Validation for status enum
-        const allowedStatuses = ['pending', 'confirmed', 'completed', 'cancelled'];
+        const allowedStatuses = ['pending', 'confirmed', 'completed', 'cancelled', 'upcoming', 'all'];
         if (status && !allowedStatuses.includes(status)) {
             return res.status(400).json({
                 success: false,

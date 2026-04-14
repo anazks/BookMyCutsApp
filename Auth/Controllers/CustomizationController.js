@@ -23,7 +23,8 @@ const createCustomization = async (req, res) => {
 
 const getCustomization = async (req, res) => {
     try {
-        const customization = await getCustomizationUseCase();
+        const { screen } = req.query; // e.g. ?screen=booking
+        const customization = await getCustomizationUseCase(screen);
 
         if (!customization) {
             return res.status(404).json({
