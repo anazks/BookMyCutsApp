@@ -617,7 +617,8 @@ const userGoogleSignin = async (req, res) => {
       id: verified.data._id,
       firstName: verified.data.firstName,
       lastName: verified.data.lastName,
-      email: verified.data.email
+      email: verified.data.email,
+      shopId: verified.data.shopId || null
     }
     console.log("user .................", user)
     if (verified) {

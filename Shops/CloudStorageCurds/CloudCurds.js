@@ -70,8 +70,13 @@ const uploadMedia = async (req, res) => {
         };
 
         // 4. Find and update shop - push the ENTIRE OBJECT to the media array
-        const updatedShop = await ShopModel.findByIdAndUpdate(
-            shopId,
+        const updatedShop = await ShopModel.findOneAndUpdate(
+            {
+                $or: [
+                    { _id: shopId },
+                    { ShopOwnerId: shopId }
+                ]
+            },
             {
                 $push: {
                     media: newMediaObject // Pushing the object now
@@ -87,7 +92,10 @@ const uploadMedia = async (req, res) => {
         if (!updatedShop) {
             // Also recommended: Delete the file from Cloudinary if the shop is not found
             // await cloudinary.uploader.destroy(uploadResult.public_id, { resource_type: resourceType });
-            return res.status(404).json({ message: "Shop not found" });
+            console.log(`[DEBUG] Shop not found in DB for ID: ${shopId}`);
+            const allShopsCount = await ShopModel.countDocuments();
+            console.log(`[DEBUG] Total shops currently in DB: ${allShopsCount}`);
+            return res.status(404).json({ message: "Shop not found. Please double-check the ID that you passed in Postman." });
         }
 
         // Return success response with updated shop document (NO CHANGE HERE)

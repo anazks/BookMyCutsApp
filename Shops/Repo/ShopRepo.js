@@ -33,8 +33,8 @@ module.exports.addShop = async (data) => {
 
 module.exports.viewAllShops = async () => {
     try {
-        // Return only shops where isActive is true
-        return await ShopModel.find({ isActive: true });
+        // Return all shops regardless of isActive status
+        return await ShopModel.find({});
     } catch (error) {
         console.log(error);
         throw error; // Better to throw error for handling upstream

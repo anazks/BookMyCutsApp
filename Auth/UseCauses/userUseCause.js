@@ -7,6 +7,7 @@ const twilio = require("twilio");
 const otpModel = require('../Model/OtpModel');
 const ShoperModel = require("../Model/ShoperModel");
 const UserModel = require("../Model/UserModel")
+const ShopModel = require('../../Shops/Model/ShopModel');
 const { OAuth2Client } = require('google-auth-library');
 const crypto = require("crypto");
 require('dotenv').config();
@@ -380,19 +381,38 @@ module.exports.verifyGoogleIdToken = async (data) => {
       throw new Error('Invalid role');
     }
 
-    // 4️⃣ Generate JWT
+    // 4️⃣ Fetch shopId if it's a shop owner
+    let shopId = null;
+    if (role === 'shop') {
+      const shop = await ShopModel.findOne({ ShopOwnerId: account._id });
+      shopId = shop ? shop._id : null;
+    }
+
+    // 5️⃣ Generate JWT
     const token = jwt.sign(
       { id: account._id, role },
       secretKey,
       { expiresIn: '1h' }
     );
 
-    // 5️⃣ Unified return
+    // 6️⃣ Unified return
+    const responseUserData = {
+      _id: account._id,
+      email: account.email,
+      firstName: account.firstName,
+      lastName: account.lastName,
+      mobileNo: account.mobileNo,
+      city: account.city,
+      googleId: account.googleId,
+      authProvider: account.authProvider,
+      shopId: shopId // Now explicitly included!
+    };
+
     return {
       success: true,
       role,
       token,
-      data: account
+      data: responseUserData
     };
 
   } catch (error) {

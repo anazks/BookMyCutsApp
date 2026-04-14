@@ -16,11 +16,21 @@ module.exports.fetchDashboardStats = async () => {
             $lte: new Date(new Date().setHours(23, 59, 59, 999))
             }
         });
+
+        // Calculate today's transaction amount
+        const todaysTransactionAmount = todayBookings.reduce((sum, booking) => sum + (Number(booking.amountPaid) || 0), 0);
+        const todaysTotalSalesValue = todayBookings.reduce((sum, booking) => sum + (Number(booking.totalPrice) || 0), 0);
+        const todaysPlatformFees = todayBookings.reduce((sum, booking) => sum + (Number(booking.platformFee) || 0), 0);
+
         return {
             usersCount,
             shopOwnersCount,
             shopsCount,
-            todayBookings
+            todayBookingsCount: todayBookings.length, 
+            todayBookings,
+            todaysTransactionAmount,     // Actual money collected today (online + advance)
+            todaysTotalSalesValue,       // Total worth of the services
+            todaysPlatformFees           // Total platform fees generated
         }
     } catch (error) {
         console.log(error)
