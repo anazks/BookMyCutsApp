@@ -10,7 +10,8 @@ const uploadToCloudinary = async (file) => {
             {
                 folder: `customization`,
                 resource_type: 'image',
-                public_id: `${Date.now()}_${file.originalname.split('.')[0]}`,
+                // We trim and replace spaces with underscores to avoid whitespace errors
+                public_id: `${Date.now()}_${file.originalname.split('.')[0].trim().replace(/\s+/g, '_')}`,
                 unique_filename: true,
                 overwrite: false
             },

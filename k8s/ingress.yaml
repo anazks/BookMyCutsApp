@@ -2,10 +2,8 @@ apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: bookmycuts-ingress
-  annotations:
-    # This tells Kubernetes to use the built-in Traefik "Guardian"
-    kubernetes.io/ingress.class: traefik
 spec:
+  ingressClassName: traefik  # Modern way to specify the controller
   rules:
   - http:
       paths:

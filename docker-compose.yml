@@ -5,41 +5,13 @@ services:
     image: redis:latest
     restart: always
 
-  app1:
+  app:
     build: .
-    restart: always
-    env_file: .env # Reads your .env file
-    environment:
-      - REDIS_URL=redis://redis:6379
-    depends_on:
-      - redis
-
-  app2:
-    build: .
-    restart: always
-    env_file: .env
-    environment:
-      - REDIS_URL=redis://redis:6379
-    depends_on:
-      - redis
-
-  app3:
-    build: .
-    restart: always
-    env_file: .env
-    environment:
-      - REDIS_URL=redis://redis:6379
-    depends_on:
-      - redis
-
-  nginx:
-    image: nginx:latest
     restart: always
     ports:
-      - "80:80"        # This maps port 80 of the host (VM) to port 80 of the nginx container
-    volumes:
-      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - "5000:5000"    # Access your app directly at http://localhost:5000
+    env_file: .env
+    environment:
+      - REDIS_URL=redis://redis:6379
     depends_on:
-      - app1
-      - app2
-      - app3
+      - redis
