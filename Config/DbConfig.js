@@ -1,5 +1,10 @@
 /* eslint-disable @typescript-eslint/naming-convention */
+const dns = require('dns');
 const mongoose = require('mongoose');
+
+// Force Google DNS to resolve MongoDB Atlas SRV records
+// (ISP/local DNS may not support SRV lookups required by mongodb+srv://)
+dns.setServers(['8.8.8.8', '8.8.4.4']);
 
 const DB_URI = process.env.DATABASE_URL;
 const MAX_RETRY_ATTEMPTS = 20;

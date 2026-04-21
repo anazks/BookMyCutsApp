@@ -2,6 +2,7 @@ const express = require('express');
 const app = express();
 const dotenv = require('dotenv')
 const cors = require('cors')
+const compression = require('compression')
 dotenv.config()
 const connectToDatabase = require('./Config/DbConfig')
 const mongoose = require('mongoose');
@@ -10,6 +11,7 @@ const cron = require('node-cron')
 // const redisClient = require('./Config/redis')
 
 app.use(cors())
+app.use(compression())
 
 const os = require('os');
 app.use((req, res, next) => {
@@ -48,7 +50,7 @@ app.use(express.json({
 app.use(express.urlencoded({ extended: true }));
 
 // Define the port
-const port = 3002
+const port = 5000
 
 app.use('/api/auth', authRouter)
 app.use('/api/shop', shopRouter)

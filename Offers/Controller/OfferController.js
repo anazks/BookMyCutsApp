@@ -81,9 +81,72 @@ const toggleOfferStatus = asyncHandler(async (req, res) => {
     res.status(200).json({ success: true, data: offer });
 });
 
+// @desc    Edit an existing offer
+// @route   PUT /api/offers/:id
+// @access  Private (ShopOwner/Admin)
+const editOffer = asyncHandler(async (req, res) => {
+    const offer = await Offer.findById(req.params.id);
+    if (!offer) {
+        res.status(404);
+        throw new Error('Offer not found');
+    }
+
+    const {
+        title,
+        description,
+        offerLevel,
+        offerType,
+        discountValue,
+        discountType,
+        shopId,
+        validUntil
+    } = req.body;
+
+    offer.title        = title        ?? offer.title;
+    offer.description  = description  ?? offer.description;
+    offer.offerLevel   = offerLevel   ?? offer.offerLevel;
+    offer.offerType    = offerType    ?? offer.offerType;
+    offer.discountValue = offerType === 'discount'
+        ? (discountValue ?? offer.discountValue)
+        : 0;
+    offer.discountType  = offerType === 'discount'
+        ? (discountType ?? offer.discountType)
+        : 'flat';
+    offer.shopId       = (offerLevel ?? offer.offerLevel) === 'shop'
+        ? (shopId ?? offer.shopId)
+        : null;
+    offer.validUntil   = validUntil   ?? offer.validUntil;
+
+    const updatedOffer = await offer.save();
+    res.status(200).json({
+        success: true,
+        message: 'Offer updated successfully',
+        data: updatedOffer
+    });
+});
+
+// @desc    Delete an offer
+// @route   DELETE /api/offers/:id
+// @access  Private (ShopOwner/Admin)
+const deleteOffer = asyncHandler(async (req, res) => {
+    const offer = await Offer.findById(req.params.id);
+    if (!offer) {
+        res.status(404);
+        throw new Error('Offer not found');
+    }
+
+    await offer.deleteOne();
+    res.status(200).json({
+        success: true,
+        message: 'Offer deleted successfully'
+    });
+});
+
 module.exports = {
     createOffer,
     getPlatformOffers,
     getShopOffers,
-    toggleOfferStatus
+    toggleOfferStatus,
+    editOffer,
+    deleteOffer
 };

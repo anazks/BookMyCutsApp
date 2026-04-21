@@ -681,7 +681,7 @@ const deleteBarber = async (req, res) => {
 }
 
 
-const createPremiumOrder = async (req, res) => {
+ const createPremiumOrder = async (req, res) => {
     try {
         const { shopId } = req.body;
         if (!shopId) {

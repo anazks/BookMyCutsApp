@@ -42,8 +42,8 @@ metadata:
 spec:
   type: LoadBalancer     # This automatically creates a Load Balancer just like NGINX
   ports:
-    - port: 80           # The front door port
-      targetPort: 3002   # The port your app.js is secretly listening on
+    - port: 5000          # The main entrance port
+      targetPort: 5000    # Pointing to the new app port
   selector:
     app: bookmycuts
 
@@ -54,7 +54,7 @@ kind: Deployment
 metadata:
   name: bookmycuts-backend
 spec:
-  replicas: 3            # We start with 3 copies, just like Docker Compose
+  replicas: 3            # Keeping 3 copies for backup
   selector:
     matchLabels:
       app: bookmycuts
@@ -65,18 +65,27 @@ spec:
     spec:
       containers:
       - name: bookmycuts-node
-        # IMPORTANT: Kubernetes cannot build images from local files. 
-        # You will need to build the image (docker build -t myname/bookmycuts .) 
-        image: bookmycuts:local
-        imagePullPolicy: Never    # Forces Kubernetes to use the image baked on your laptop instead of the internet
+        image: govind858/bookmycuts-backend:latest
+        imagePullPolicy: Always
         ports:
-        - containerPort: 3002
+        - containerPort: 5000
         env:
         - name: REDIS_URL
           value: "redis://redis:6379"
-        # We must define CPU limits so the Auto-Scaler knows when the server is struggling
+        
+        # Health Check: Ensures your app is ready before sending users to it
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 5000
+          initialDelaySeconds: 10
+          periodSeconds: 5
+
+        # Updated CPU/RAM for faster performance
         resources:
           requests:
-            cpu: "250m"  # Standard idle CPU usage
+            cpu: "500m"     # Start with 0.5 CPU
+            memory: "512Mi" # Start with 512MB RAM
           limits:
-            cpu: "500m"  # Maximum allowed CPU usage
+            cpu: "1"        # Max 1.0 CPU
+            memory: "1Gi"   # Max 1GB RAM

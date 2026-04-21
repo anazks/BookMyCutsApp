@@ -779,7 +779,7 @@ const completeBooking = async (req, res) => {
 const razorpayWebhook = async (req, res) => {
   try {
     const signature = req.headers['x-razorpay-signature'];
-    const secret = process.env.RAZORPAY_WEBHOOK_SECRET;
+    const secret = process.env.RAZORYPAY_FAILED_PAYMENT_WEBHOOK;
     
     // Ensure we have the raw body for verification
     const bodyToVerify = req.rawBody;

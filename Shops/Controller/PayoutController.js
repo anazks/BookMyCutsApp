@@ -17,11 +17,8 @@ const authHeader = `Basic ${Buffer.from(`${RAZORPAY_KEY}:${RAZORPAY_SECRET}`).to
 const upsertPayoutAccount = async (req, res) => {
   try {
     const { accountHolderName, accountNumber, ifsc } = req.body;
-    console.log(req.body, "DATA")
-    console.log(accountNumber
-
-    )
-    console.log
+    console.log(req.body, "DATA");
+    
     // Validation
     if (!accountHolderName || !accountNumber || !ifsc) {
       return res.status(400).json({ message: "All fields are required" });
