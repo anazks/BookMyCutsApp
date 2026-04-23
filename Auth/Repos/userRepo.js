@@ -136,8 +136,15 @@ module.exports.fetchUsers = async (page,limit) => {
 module.exports.findUserById = async (userId) => {
   try {
     console.log(userId, "userId");
-    const owner = await UserModel.findById(userId);
+    let owner = await UserModel.findById(userId);
+    
+    // If not found in UserModel, search in ShoperModel (for shop owners)
     if (!owner) {
+      owner = await shoperModel.findById(userId);
+    }
+
+    if (!owner) {
+      console.error(`No user found with ID: ${userId}`);
       return null;
     }
     const shop = await ShopModel.findOne({
