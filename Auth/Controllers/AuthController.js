@@ -162,7 +162,7 @@ const otpRequest = async (req, res) => {
     } else {
       res.status(404).json({
         success: false,
-        message: "faild to generate otp"
+        message: "failed to generate otp"
       })
     }
   } catch (error) {
@@ -542,7 +542,7 @@ const fetchUser = async (req, res) => {
     } else {
       res.status(404).json({
         success: false,
-        messsage: "failed to get shop owner"
+        message: "failed to get shop owner"
       })
     }
   } catch (error) {
@@ -557,7 +557,7 @@ const fetchUser = async (req, res) => {
 const removeShopOwner = async (req, res) => {
   try {
     const userId = req.params.id
-    const user = deleteShopOwner(userId)
+    const user = await deleteShopOwner(userId)
     if (user) {
       res.status(200).json({
         success: true,
@@ -565,7 +565,7 @@ const removeShopOwner = async (req, res) => {
         user
       })
     } else {
-      res.statu(404).json({
+      res.status(404).json({
         success: false,
         message: "deletion failed"
       })
@@ -574,7 +574,7 @@ const removeShopOwner = async (req, res) => {
     console.log(error)
     res.status(500).json({
       success: false,
-      message: "internar server error"
+      message: "internal server error"
     })
   }
 }
@@ -593,7 +593,7 @@ const updateShopOwner = async (req, res) => {
     } else {
       res.status(404).json({
         success: false,
-        message: "failed update shop owner"
+        message: "failed to update shop owner"
       })
     }
   } catch (error) {
