@@ -1,4 +1,4 @@
-const { createUser,findUserByEmail ,createShoper,findShoper, saveOtp,isUserIsNew,findAdminByUserName } = require("../Repos/userRepo");
+const { createUser, findUserByEmail, createShoper, findShoper, saveOtp, isUserIsNew, findAdminByUserName } = require("../Repos/userRepo");
 const bcrypt = require('bcryptjs')
 const jwt = require('jsonwebtoken');
 const nodemailer = require('nodemailer');
@@ -8,13 +8,41 @@ const otpModel = require('../Model/OtpModel');
 const ShoperModel = require("../Model/ShoperModel");
 const UserModel = require("../Model/UserModel")
 const ShopModel = require('../../Shops/Model/ShopModel');
+const AdminModel = require('../Model/AdminModel');
 const { OAuth2Client } = require('google-auth-library');
 const crypto = require("crypto");
 require('dotenv').config();
 
 
 
-const secretKey =  process.env.secretKey;
+const secretKey = process.env.secretKey;
+const refreshSecretKey = process.env.refreshSecretKey || "iamAnazRefreshSecret";
+
+const generateAuthTokens = (id, role) => {
+    const accessToken = jwt.sign({ id, role }, secretKey, { expiresIn: '2m' });
+    const refreshToken = jwt.sign({ id, role }, refreshSecretKey, { expiresIn: '7d' });
+    return { accessToken, refreshToken };
+};
+
+module.exports.refreshAccessTokenUseCase = async (refreshToken) => {
+    if (!refreshToken) throw new Error("Refresh Token is required");
+
+    const decoded = jwt.verify(refreshToken, refreshSecretKey);
+    const { id, role } = decoded;
+
+    if (!role) throw new Error("Invalid refresh token: Role missing");
+
+    let userExists = false;
+    if (role === 'admin') userExists = await AdminModel.exists({ _id: id });
+    else if (role === 'shop') userExists = await ShoperModel.exists({ _id: id });
+    else if (role === 'user') userExists = await UserModel.exists({ _id: id });
+
+    if (!userExists) throw new Error("User not found or deleted");
+
+    const newAccessToken = jwt.sign({ id, role }, secretKey, { expiresIn: '1h' });
+    
+    return { accessToken: newAccessToken };
+};
 
 
 
@@ -52,7 +80,7 @@ module.exports.registerUserUseCase = async (data) => {
   const newReferralCode = await generateReferralCode();
   let refUser = null;
   if (referralCodeInput) {
-     refUser = await findReferrerByCode(referralCodeInput);
+    refUser = await findReferrerByCode(referralCodeInput);
   }
 
   const hashedPassword = await bcrypt.hash(password, 10);
@@ -61,7 +89,7 @@ module.exports.registerUserUseCase = async (data) => {
     ...data,
     password: hashedPassword,
     referralCode: newReferralCode,
-    referredBy:refUser || null
+    referredBy: refUser || null
   });
 
   return user;
@@ -69,117 +97,114 @@ module.exports.registerUserUseCase = async (data) => {
 
 // usecase / service layer
 module.exports.loginuserUsecause = async (data) => {
-    try {
-        const { email, password } = data;
+  try {
+    const { email, password } = data;
 
-        if (!email || !password) {
-            return {
-                success: false,
-                message: "Email and password are required"
-            };
-        }
-
-        console.log(`Login attempt for email: ${email}`);
-
-        const user = await findUserByEmail({ email });
-        if (!user) {
-            return {
-                success: false,
-                message: "User not found"
-            };
-        }
-
-        // Safety check: prevent bcrypt crash if password field is missing/corrupted
-        if (!user.password || typeof user.password !== 'string' || !user.password.startsWith('$2')) {
-            console.error(`Invalid or missing password hash for user: ${email}`);
-            return {
-                success: false,
-                message: "Invalid account credentials"
-            };
-        }
-
-        let isMatch;
-        try {
-            isMatch = await bcrypt.compare(password, user.password);
-        } catch (bcryptErr) {
-            console.error("bcrypt.compare failed:", bcryptErr.message);
-            return {
-                success: false,
-                message: "Authentication error – please try again"
-            };
-        }
-
-        if (!isMatch) {
-            return {
-                success: false,
-                message: "Invalid password"
-            };
-        }
-
-        // ── Successful login ────────────────────────────────────────────────
-        const token = jwt.sign(
-            { id: user._id.toString() },
-            secretKey,
-            { expiresIn: '1h' }
-        );
-
-        const userData = {
-            id: user._id.toString(),
-            firstName: user.firstName || '',
-            mobileNo: user.mobileNo || '',
-            city: user.city || ''
-            // Add any other safe fields you want to return
-        };
-
-        return {
-            success: true,
-            message: "Login successful",
-            token,
-            user: userData
-        };
-
-    } catch (error) {
-        console.error("loginuserUsecause error:", error);
-        return {
-            success: false,
-            message: "Server error during login"
-        };
+    if (!email || !password) {
+      return {
+        success: false,
+        message: "Email and password are required"
+      };
     }
+
+    console.log(`Login attempt for email: ${email}`);
+
+    const user = await findUserByEmail({ email });
+    if (!user) {
+      return {
+        success: false,
+        message: "User not found"
+      };
+    }
+
+    // Safety check: prevent bcrypt crash if password field is missing/corrupted
+    if (!user.password || typeof user.password !== 'string' || !user.password.startsWith('$2')) {
+      console.error(`Invalid or missing password hash for user: ${email}`);
+      return {
+        success: false,
+        message: "Invalid account credentials"
+      };
+    }
+
+    let isMatch;
+    try {
+      isMatch = await bcrypt.compare(password, user.password);
+    } catch (bcryptErr) {
+      console.error("bcrypt.compare failed:", bcryptErr.message);
+      return {
+        success: false,
+        message: "Authentication error – please try again"
+      };
+    }
+
+    if (!isMatch) {
+      return {
+        success: false,
+        message: "Invalid password"
+      };
+    }
+
+    // ── Successful login ────────────────────────────────────────────────
+    const { accessToken, refreshToken } = generateAuthTokens(user._id.toString(), 'user');
+
+    const userData = {
+      id: user._id.toString(),
+      firstName: user.firstName || '',
+      mobileNo: user.mobileNo || '',
+      city: user.city || ''
+      // Add any other safe fields you want to return
+    };
+
+    return {
+      success: true,
+      message: "Login successful",
+      accessToken,
+      refreshToken,
+      user: userData
+    };
+
+  } catch (error) {
+    console.error("loginuserUsecause error:", error);
+    return {
+      success: false,
+      message: "Server error during login"
+    };
+  }
 };
 
 // Controller
 const userLogin = asyncHandler(async (req, res) => {
-    const data = req.body;
-    console.log("Login request body:", data);
+  const data = req.body;
+  console.log("Login request body:", data);
 
-    const result = await loginuserUsecause(data);
+  const result = await loginuserUsecause(data);
 
-    // We always return 200 with success flag (most common REST pattern for auth)
-    // Alternative: use 401 for auth failures — choose your preference
+  // We always return 200 with success flag (most common REST pattern for auth)
+  // Alternative: use 401 for auth failures — choose your preference
 
-    if (result.success) {
-        return res.status(200).json({
-            success: true,
-            message: "Login successful",
-            token: result.token,
-            user: result.user
-        });
-    }
-
-    // failed cases (user not found / wrong password)
-    return res.status(401).json({
-        success: false,
-        message: result.message
+  if (result.success) {
+    return res.status(200).json({
+      success: true,
+      message: "Login successful",
+      token: result.token,
+      user: result.user
     });
+  }
+
+  // failed cases (user not found / wrong password)
+  return res.status(401).json({
+    success: false,
+    message: result.message
+  });
 });
 
-module.exports.registerShoperUseCase =asyncHandler (async(data)=>{
-    let {password} = data ;
-    const saltRounds = 10;
-    const hashedPassword = await bcrypt.hash(password, saltRounds);
-    data.password = hashedPassword;
-    const shop = await createShoper(data);
-    return shop;
+module.exports.registerShoperUseCase = asyncHandler(async (data) => {
+  let { password } = data;
+  const saltRounds = 10;
+  const hashedPassword = await bcrypt.hash(password, saltRounds);
+  data.password = hashedPassword;
+  const shop = await createShoper(data);
+  return shop;
 })
 module.exports.loginShoperUsecause = async (data) => {
   const result = await findShoper(data);
@@ -204,15 +229,14 @@ module.exports.loginShoperUsecause = async (data) => {
     };
   }
 
-  const token = jwt.sign({ id: user._id }, secretKey, {
-    expiresIn: "1h",
-  });
+  const { accessToken, refreshToken } = generateAuthTokens(user._id, 'shop');
 
   const { firstName, mobileNo, city, _id } = user;
 
   return {
     success: true,
-    token,
+    accessToken,
+    refreshToken,
     userData: {
       _id,
       firstName,
@@ -290,7 +314,7 @@ module.exports.sendOtpmobileNo = async (data) => {
   }
 };
 
-module.exports.verifyOtpFunction = async (otp, mobileNo,role) => {
+module.exports.verifyOtpFunction = async (otp, mobileNo, role) => {
   try {
     // const emailNormalized = email.trim().toLowerCase();
     otp = Number(otp);
@@ -311,14 +335,14 @@ module.exports.verifyOtpFunction = async (otp, mobileNo,role) => {
       // Handle an invalid role, if necessary
       return "Invalid role specified";
     }
-    const user = await model.findOne({mobileNo})
-    console.log(user,"user fetching using mobile---------")
-    
-    
+    const user = await model.findOne({ mobileNo })
+    console.log(user, "user fetching using mobile---------")
 
-    const token = jwt.sign({ id: user._id }, secretKey, { expiresIn: '1h' }); // Token expires in 1 hour
 
-    return { success: true, token };
+
+    const { accessToken, refreshToken } = generateAuthTokens(user._id, role);
+
+    return { success: true, accessToken, refreshToken };
   } catch (error) {
     console.log("Error verifying OTP:", error);
     return { success: false, message: "Server error" };
@@ -366,7 +390,7 @@ module.exports.verifyGoogleIdToken = async (data) => {
       if (!account) {
         account = await UserModel.create(userData);
       }
-    } 
+    }
     else if (role === 'shop') {
       account = await ShoperModel.findOne({ email: userData.email });
 
@@ -376,7 +400,7 @@ module.exports.verifyGoogleIdToken = async (data) => {
           isProfileCompleted: false
         });
       }
-    } 
+    }
     else {
       throw new Error('Invalid role');
     }
@@ -389,11 +413,7 @@ module.exports.verifyGoogleIdToken = async (data) => {
     }
 
     // 5️⃣ Generate JWT
-    const token = jwt.sign(
-      { id: account._id, role },
-      secretKey,
-      { expiresIn: '1h' }
-    );
+    const { accessToken, refreshToken } = generateAuthTokens(account._id, role);
 
     // 6️⃣ Unified return
     const responseUserData = {
@@ -411,14 +431,15 @@ module.exports.verifyGoogleIdToken = async (data) => {
     return {
       success: true,
       role,
-      token,
+      accessToken,
+      refreshToken,
       data: responseUserData
     };
 
   } catch (error) {
     // This will now catch and log the specific error if the token is still invalid
     console.error('Google Auth Error:', error.message);
-    throw error; 
+    throw error;
   }
 };
 
@@ -426,80 +447,78 @@ module.exports.verifyGoogleIdToken = async (data) => {
 
 
 module.exports.adminLoginUsecause = async (data) => {
-    try {
-        const { userName, password } = data;
+  try {
+    console.log(data, "dattttaaaasaaa")
+    const { userName, password } = data;
 
-        if (!userName || !password) {
-            return {
-                success: false,
-                message: "Email and password are required"
-            };
-        }
-
-        console.log(`Login attempt for userName: ${userName}`);
-
-        const admin = await findAdminByUserName({ userName });
-        if (!admin) {
-            return {
-                success: false,
-                message: "admin not found"
-            };
-        }
-
-        // Safety check: prevent bcrypt crash if password field is missing/corrupted
-        if (!admin.password || typeof admin.password !== 'string' || !admin.password.startsWith('$2')) {
-            console.error(`Invalid or missing password hash for user: ${admin}`);
-            return {
-                success: false,
-                message: "Invalid account credentials"
-            };
-        }
-
-        let isMatch;
-        try {
-            isMatch = await bcrypt.compare(password, admin.password);
-        } catch (bcryptErr) {
-            console.error("bcrypt.compare failed:", bcryptErr.message);
-            return {
-                success: false,
-                message: "Authentication error – please try again"
-            };
-        }
-
-        if (!isMatch) {
-            return {
-                success: false,
-                message: "Invalid password"
-            };
-        }
-
-        // ── Successful login ────────────────────────────────────────────────
-        const token = jwt.sign(
-            { id: admin._id.toString() },
-            secretKey,
-            { expiresIn: '1h' }
-        );
-
-        const userData = {
-            id: admin._id.toString(),
-            userName: admin.userName || '',
-            password: admin.password || '',
-            // Add any other safe fields you want to return
-        };
-
-        return {
-            success: true,
-            message: "Login successful",
-            token,
-            admin: userData
-        };
-
-    } catch (error) {
-        console.error("loginuserUsecause error:", error);
-        return {
-            success: false,
-            message: "Server error during login"
-        };
+    if (!userName || !password) {
+      return {
+        success: false,
+        message: "Email and password are required"
+      };
     }
+
+    console.log(`Login attempt for userName: ${userName}`);
+
+    const admin = await findAdminByUserName({ userName });
+    if (!admin) {
+      return {
+        success: false,
+        message: "admin not found"
+      };
+    }
+
+    // Safety check: prevent bcrypt crash if password field is missing/corrupted
+    if (!admin.password || typeof admin.password !== 'string' || !admin.password.startsWith('$2')) {
+      console.error(`Invalid or missing password hash for user: ${admin}`);
+      return {
+        success: false,
+        message: "Invalid account credentials"
+      };
+    }
+
+    let isMatch;
+    try {
+      isMatch = await bcrypt.compare(password, admin.password);
+    } catch (bcryptErr) {
+      console.error("bcrypt.compare failed:", bcryptErr.message);
+      return {
+        success: false,
+        message: "Authentication error – please try again"
+      };
+    }
+
+    if (!isMatch) {
+      return {
+        success: false,
+        message: "Invalid password"
+      };
+    }
+
+    // ── Successful login ────────────────────────────────────────────────
+    const { accessToken, refreshToken } = generateAuthTokens(admin._id.toString(), 'admin');
+
+    const userData = {
+      id: admin._id.toString(),
+      userName: admin.userName || '',
+      password: admin.password || '',
+      // Add any other safe fields you want to return
+    };
+
+    return {
+      success: true,
+      message: "Login successful",
+      accessToken,
+      refreshToken,
+      admin: userData
+    };
+
+  } catch (error) {
+    console.error("loginuserUsecause error:", error);
+    return {
+      success: false,
+      message: "Server error during login"
+    };
+  }
 };
 

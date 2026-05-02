@@ -1,0 +1,35 @@
+swagger: '3.0.0'
+info:
+  title: Shop Owner APIs
+  description: API endpoints designated for Shop Owners
+  version: 1.0.0
+paths:
+  /api/shop/getMyProfile:
+    get:
+      summary: Get Shop Owner Profile
+      description: Retrieve the profile data for the logged-in shop owner
+      tags:
+        - ShopOwner
+      security:
+        - JWT: []
+      responses:
+        200:
+          description: Successfully retrieved shop owner profile
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      name:
+                        type: string
+                        example: "Super Cuts"
+        401:
+          description: Unauthorized
+        403:
+          description: Forbidden - Insufficient permissions

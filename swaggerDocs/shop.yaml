@@ -1,0 +1,33 @@
+swagger: '3.0.0'
+info:
+  title: Shop Model API
+  description: API related to Shops models
+  version: 1.0.0
+paths:
+  /api/shop/ViewAllShop:
+    get:
+      summary: View All Shops
+      description: Fetch all shops available in the system
+      tags:
+        - User
+      responses:
+        200:
+          description: Success response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        shopName:
+                          type: string
+                          example: "Cuts and Trims"
+        500:
+          description: Server Error

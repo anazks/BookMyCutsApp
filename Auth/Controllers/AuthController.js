@@ -1,5 +1,5 @@
 const asyncHandler = require("express-async-handler");
-const { registerUserUseCase, loginuserUsecause, registerShoperUseCase, loginShoperUsecause, sendOtpmobileNo, verifyOtpFunction, verifyGoogleIdToken, adminLoginUsecause } = require("../UseCauses/userUseCause");
+const { registerUserUseCase, loginuserUsecause, registerShoperUseCase, loginShoperUsecause, sendOtpmobileNo, verifyOtpFunction, verifyGoogleIdToken, adminLoginUsecause, refreshAccessTokenUseCase } = require("../UseCauses/userUseCause");
 const decorder = require("../../TokenDecoder/Decoder");
 const { getUserProfile, deleteUserFunction, getAllShopOwners, updatePassword, fetchUsers, findUserById, modifyShopOwner, deleteShopOwner, getNearestCities } = require("../Repos/userRepo")
 constm = require('bcryptjs')
@@ -35,7 +35,8 @@ const userLogin = asyncHandler(async (req, res) => {
       return res.status(200).json({
         success: true,
         message: result.message || "Login successful",
-        token: result.token,
+        accessToken: result.accessToken,
+        refreshToken: result.refreshToken,
         user: result.user
       });
     } if (result === 0) {
@@ -94,7 +95,8 @@ const login = asyncHandler(async (req, res) => {
   res.status(200).json({
     success: true,
     message: "Login successful",
-    token: result.token,
+    accessToken: result.accessToken,
+    refreshToken: result.refreshToken,
     user: result.userData,
   });
 });
@@ -190,7 +192,8 @@ const verifyOtp = async (req, res) => {
       return res.status(200).json({
         success: true,
         message: "OTP verified successfully",
-        token: result.token
+        accessToken: result.accessToken,
+        refreshToken: result.refreshToken
       });
     }
 
@@ -611,8 +614,8 @@ const userGoogleSignin = async (req, res) => {
     console.log("REQUEST HIT THE BACKEND >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
     const verified = await verifyGoogleIdToken(data)
     console.log(verified, "verified ")
-    const token = verified.token
-    console.log(token, "token >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
+    const { accessToken, refreshToken } = verified
+    console.log(accessToken, "token >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
     const user = {
       id: verified.data._id,
       firstName: verified.data.firstName,
@@ -625,7 +628,8 @@ const userGoogleSignin = async (req, res) => {
       res.status(200).json({
         success: true,
         message: "login successfully",
-        token,
+        accessToken,
+        refreshToken,
         user
       })
     } else {
@@ -673,8 +677,9 @@ const adminLogin = asyncHandler(async (req, res) => {
       return res.status(200).json({
         success: true,
         message: result.message || "Login successful",
-        token: result.token,
-        user: result.user
+        accessToken: result.accessToken,
+        refreshToken: result.refreshToken,
+        user: result.admin
       });
     } if (result === 0) {
       res.json({
@@ -701,6 +706,21 @@ const adminLogin = asyncHandler(async (req, res) => {
       // error: error.message   // ← uncomment only during development
     });
   }
+});
+
+const refreshToken = asyncHandler(async (req, res) => {
+    try {
+        const token = req.body.refreshToken;
+        if (!token) {
+            return res.status(400).json({ success: false, message: "Refresh Token is required" });
+        }
+        
+        const result = await refreshAccessTokenUseCase(token);
+        res.status(200).json({ success: true, accessToken: result.accessToken });
+    } catch (error) {
+        console.error("Refresh Token Error:", error.message);
+        res.status(401).json({ success: false, message: error.message || "Invalid refresh token" });
+    }
 });
 
 
@@ -904,4 +924,4 @@ const fetchMyNotifications = async (req, res) => {
 };
 
 
-module.exports = { fetchMyNotifications, sendArrivalCheckNotification, getNearbyCitiesController, adminLogin, AdminRegistration, userGoogleSignin, updateShopOwner, removeShopOwner, resetPassword, verifyForgotPasswordOtp, forgotPassword, viewAllShopOwners, deleteUser, userRegistration, userLogin, ShopRegister, login, getUsers, getProfile, otpRequest, verifyOtp, fetchUser, saveNotificationToken }
+module.exports = { refreshToken, fetchMyNotifications, sendArrivalCheckNotification, getNearbyCitiesController, adminLogin, AdminRegistration, userGoogleSignin, updateShopOwner, removeShopOwner, resetPassword, verifyForgotPasswordOtp, forgotPassword, viewAllShopOwners, deleteUser, userRegistration, userLogin, ShopRegister, login, getUsers, getProfile, otpRequest, verifyOtp, fetchUser, saveNotificationToken }

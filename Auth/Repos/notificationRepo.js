@@ -11,11 +11,21 @@ module.exports.getTargetUsers = async (audience, accountType, specificIds) => {
         let users = [];
 
         if (audience === 'ALL') {
-            const allUsers = await UserModel.find({ PushToken: { $exists: true, $ne: null } })
-                .select('_id PushToken')
+            const allUsers = await UserModel.find({ 
+                $or: [
+                    { PushToken: { $exists: true, $ne: null } },
+                    { pushToken: { $exists: true, $ne: null } }
+                ]
+            })
+                .select('_id PushToken pushToken')
                 .lean();
-            const allShopOwners = await ShoperModel.find({ PushToken: { $exists: true, $ne: null } })
-                .select('_id PushToken')
+            const allShopOwners = await ShoperModel.find({ 
+                $or: [
+                    { PushToken: { $exists: true, $ne: null } },
+                    { pushToken: { $exists: true, $ne: null } }
+                ]
+            })
+                .select('_id PushToken pushToken')
                 .lean();
                 
             users = [
@@ -23,27 +33,40 @@ module.exports.getTargetUsers = async (audience, accountType, specificIds) => {
                 ...allShopOwners.map(s => ({ ...s, accountType: 'shopOwner' }))
             ];
         } else if (audience === 'ALL_USERS') {
-            const result = await UserModel.find({ PushToken: { $exists: true, $ne: null } })
-                .select('_id PushToken')
+            const result = await UserModel.find({ 
+                $or: [
+                    { PushToken: { $exists: true, $ne: null } },
+                    { pushToken: { $exists: true, $ne: null } }
+                ]
+            })
+                .select('_id PushToken pushToken')
                 .lean();
             users = result.map(u => ({ ...u, accountType: 'User' }));
         } else if (audience === 'ALL_SHOP_OWNERS') {
-            const result = await ShoperModel.find({ PushToken: { $exists: true, $ne: null } })
-                .select('_id PushToken')
+            const result = await ShoperModel.find({ 
+                $or: [
+                    { PushToken: { $exists: true, $ne: null } },
+                    { pushToken: { $exists: true, $ne: null } }
+                ]
+            })
+                .select('_id PushToken pushToken')
                 .lean();
             users = result.map(u => ({ ...u, accountType: 'shopOwner' }));
         } else if (audience === 'SPECIFIC') {
             if (!specificIds || specificIds.length === 0) {
                 return [];
             }
+            // Ensure IDs are strings and trimmed
+            const cleanIds = specificIds.map(id => String(id).trim());
+            
             if (accountType === 'User') {
-                const result = await UserModel.find({ _id: { $in: specificIds } })
-                    .select('_id PushToken')
+                const result = await UserModel.find({ _id: { $in: cleanIds } })
+                    .select('_id PushToken pushToken')
                     .lean();
                 users = result.map(u => ({ ...u, accountType: 'User' }));
             } else if (accountType === 'shopOwner') {
-                const result = await ShoperModel.find({ _id: { $in: specificIds } })
-                    .select('_id PushToken')
+                const result = await ShoperModel.find({ _id: { $in: cleanIds } })
+                    .select('_id PushToken pushToken')
                     .lean();
                 users = result.map(u => ({ ...u, accountType: 'shopOwner' }));
             } else {

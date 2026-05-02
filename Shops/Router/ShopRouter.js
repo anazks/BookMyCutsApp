@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+const { verifyToken, authorizeRoles } = require('../../Middlewares/AuthMiddleWares/AuthMiddleWare');
 const multer = require('multer')
 const {migrateShopAudience, fetchBookingsByShop,viewMyshop,viewSingleShopBarbers,viewSingleShopService,myprofile,viewAllBookingOfShops,myShopProfile,AddShop,ViewAllShop,addService,ViewAllServices,addBarber,ViewAllBarbers,viewSigleShop,viewMyService,viewMyBarbers,updateBarber, deleteBarber,createPremiumOrder, verifyPremiumAndUpgrade, getAllPremiumShops, saveBankDetails, viewbankDetails, deleteBankDetails, upadateBankdetails,editService, deleteService,findNearByShops,deleteShop,addProfileImage,deleteMedia,updateMediaDetails,search,fetchAllUniqueService,filterShopsByService,viewAllService,editShop,getShop, fetchServicebyShop, fetchBarbersbyShop,viewService,delService,createAsBarber } = require('../Controller/ShopController')
 const {uploadMedia}  = require('../../Shops/CloudStorageCurds/CloudCurds')
@@ -14,50 +15,61 @@ const ShopModel = require('../Model/ShopModel')
 const Barabar = require('../Model/BarbarModel')
 const City = require('../../Auth/Model/City')
 
-router.route('/addShop').post(AddShop)
-router.route('/getMyProfile').get(myprofile)
+// --- SHOP OWNER PROTECTED APIs ---
+const shopAuth = [verifyToken, authorizeRoles('shop')];
+
+router.route('/addShop').post(shopAuth, AddShop)
+router.route('/getMyProfile').get(shopAuth, myprofile)
+router.route('/viewMyshop').get(shopAuth, viewMyshop) 
+router.route('/viewMyBooking').get(shopAuth, viewAllBookingOfShops)
+router.route('/shop/:id').put(shopAuth, editShop)
+
+// --- PUBLIC / COMMON APIs ---
 router.route('/ViewAllShop').get(ViewAllShop)
 router.route('/viewSigleShop').post(viewSigleShop)
-router.route('/viewMyshop').get(viewMyshop) 
-router.route('/viewMyBooking').get(viewAllBookingOfShops)
 router.route('/findNearByShops').get(findNearByShops)
-router.route('/deleteShop/:id').delete(deleteShop)
-router.route('/shop/:id').put(editShop)
+router.route('/deleteShop/:id').delete(deleteShop) // Potentially admin/shop but left unprotected as per original logic unless specified
 router.route('/shop/:id').get(getShop)
 // Assuming this is a function
 // router.route('/viewMyShop').get(viewMyShop) // Assuming this is a function
 // router.route('/viewMyShop').get(myShopProfile)
-router.route('/addService').post(addService)
-router.route('/viewMyService').get(viewMyService)
+// --- SHOP OWNER SERVICE APIs ---
+router.route('/addService').post(shopAuth, addService)
+router.route('/viewMyService').get(shopAuth, viewMyService)
+router.route('/editService/:id').put(shopAuth, editService)
+router.route('/deleteService/:id').delete(shopAuth, deleteService)
+
+// --- PUBLIC SERVICE APIs ---
 router.route('/ViewAllServices').get(ViewAllServices)
-router.route('/viewSingleShopService/:id').get(viewSingleShopService) // Assuming this is a function
-router.route('/editService/:id').put(editService)
-router.route('/deleteService/:id').delete(deleteService)
+router.route('/viewSingleShopService/:id').get(viewSingleShopService)
 
-router.route('/viewSingleShopBarbers/:id').get(viewSingleShopBarbers) // Assuming this is a function
+router.route('/viewSingleShopBarbers/:id').get(viewSingleShopBarbers)
 
+// --- SHOP OWNER BARBER APIs ---
+router.route('/addBarber').post(shopAuth, addBarber)
+router.route('/viewMyBarbers').get(shopAuth, viewMyBarbers)
+router.route('/updateBarber/:id').put(shopAuth, updateBarber)
+router.route('/deleteBarber/:id/:shopId').delete(shopAuth, deleteBarber)
 
-router.route('/addBarber').post(addBarber)
+// --- PUBLIC BARBER APIs ---
 router.route('/ViewAllBarbers').get(ViewAllBarbers)
-router.route('/viewMyBarbers').get(viewMyBarbers)
-router.route('/updateBarber/:id').put(updateBarber)
-router.route('/deleteBarber/:id/:shopId').delete(deleteBarber)
 
-router.route('/premium/order').post(createPremiumOrder)
-router.route('/premium/verify').post(verifyPremiumAndUpgrade)
+// --- SHOP OWNER PREMIUM APIs ---
+router.route('/premium/order').post(shopAuth, createPremiumOrder)
+router.route('/premium/verify').post(shopAuth, verifyPremiumAndUpgrade)
 router.route('/getAllPremium').get(getAllPremiumShops)
 
-router.route('/saveBankDetails').post(saveBankDetails)
-router.route('/viewBankDetails').get(viewbankDetails)
+// --- SHOP OWNER BANK DETAILS APIs ---
+router.route('/saveBankDetails').post(shopAuth, saveBankDetails)
+router.route('/viewBankDetails').get(shopAuth, viewbankDetails)
+router.route('/deleteBankDetails/:id').delete(shopAuth, deleteBankDetails)
+router.route('/updateBankdetails/:id').put(shopAuth, upadateBankdetails)
 
-router.route('/deleteBankDetails/:id').delete(deleteBankDetails)
-router.route('/updateBankdetails/:id').put(upadateBankdetails)
-
-// cloude storage api
-router.route('/uploadMedia/:id').post(upload.single('file'), uploadMedia);  
-router.route('/addProfileImage/:id').post(upload.single('file'),addProfileImage)
-router.route('/deleteMedia/:id').delete(deleteMedia)
-router.route('/updateMedia/:mediaId').put(updateMediaDetails)
+// --- SHOP OWNER CLOUD STORAGE APIs ---
+router.route('/uploadMedia/:id').post(shopAuth, upload.single('file'), uploadMedia);  
+router.route('/addProfileImage/:id').post(shopAuth, upload.single('file'), addProfileImage)
+router.route('/deleteMedia/:id').delete(shopAuth, deleteMedia)
+router.route('/updateMedia/:mediaId').put(shopAuth, updateMediaDetails)
 router.route('/search').get(search)
 router.route('/fetchAllUniqueService').get(fetchAllUniqueService)
 router.route('/filterShopsByService').post(filterShopsByService)
@@ -69,11 +81,13 @@ router.route('/barbers/:shopId').get(fetchBarbersbyShop)
 
 
 
+// --- ADDITIONAL PUBLIC APIs ---
 router.route('/service').get(viewService)
-router.route('/service/:serviceId').delete(delService)
-router.route('/accounts').post(upsertPayoutAccount)
 
-router.route('/shop-owner/create-as-barber/:shopId').post(createAsBarber)
+// --- ADDITIONAL SHOP OWNER APIs ---
+router.route('/service/:serviceId').delete(shopAuth, delService) // Protect delete service
+router.route('/accounts').post(shopAuth, upsertPayoutAccount) // Protect payout accounts
+router.route('/shop-owner/create-as-barber/:shopId').post(shopAuth, createAsBarber)
 
 
 router.get('/cities', async (req, res) => {
@@ -112,10 +126,5 @@ router.post('/debug/migrate-audience', migrateShopAudience);
 router.use('/payout',PayoutRoutes)
 router.use('/workingHours',WorkingHoursRoutes)
 router.use('/admin',adminRoutes)
-
-
-
-
-
 
 module.exports = router;

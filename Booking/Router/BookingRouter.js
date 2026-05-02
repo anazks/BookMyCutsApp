@@ -1,51 +1,39 @@
 const express = require('express');
 const router = express.Router();
-const jwt = require('jsonwebtoken');
-const secretkey = process.env.secretKey;
 
-const {razorpayWebhook, completeBooking, checkAvailability,AddBooking,createOrder,getMybooking,findDashboardIncome,verifyPayment,barberFreeSlots,fetchAllAvailableTimeSlots,fetchUpComeingBooking,fetchAllbookings, getbookings} = require('../Controler/BookingController');
-const { verifyToken } = require('../../Middlewares/AuthMiddleWares/AuthMiddleWare');
+const {razorpayWebhook, completeBooking, checkAvailability, AddBooking,createOrder,getMybooking,findDashboardIncome,verifyPayment,barberFreeSlots,fetchAllAvailableTimeSlots,fetchUpComeingBooking,fetchAllbookings, getbookings} = require('../Controler/BookingController');
+const { verifyToken, authorizeRoles } = require('../../Middlewares/AuthMiddleWares/AuthMiddleWare');
 const UserModel = require('../../Auth/Model/UserModel');
 
-// const {checkAvailability,AddBooking,getMybooking} = require('../Controler/BookingController')
-router.route('/getAvilablity/:barberId').get(checkAvailability)
-router.route('/BookNow').post(AddBooking)
-router.route('/myBookings').post(getMybooking) // Assuming this is for adding bookings
-router.route('/webhook/razorpay').post(razorpayWebhook)
+// --- AUTH DEFS ---
+const userAuth = [verifyToken, authorizeRoles('user')];
+const shopAuth = [verifyToken, authorizeRoles('shop')];
 
+// --- EXTERNAL WEBHOOKS ---
+// Razorpay sends server-to-server callbacks here, so it CANNOT have authentication
+router.route('/webhook/razorpay').post(razorpayWebhook);
 
+// --- SHOP APIs ---
+router.route('/dashboardIncome').get(shopAuth, findDashboardIncome);
 
+// --- USER APIs ---
+router.route('/getAvilablity/:barberId').get(userAuth, checkAvailability);
+router.route('/BookNow').post(userAuth, AddBooking);
+router.route('/myBookings').post(userAuth, getMybooking);
+router.route('/create-order').post(userAuth, createOrder);
+router.route('/verifyPayment').post(userAuth, verifyPayment);
+router.route('/getBarberFreeTime').post(userAuth, barberFreeSlots);
+router.route('/fetchAllAvailableTimeSlots').post(userAuth, fetchAllAvailableTimeSlots);
+router.route('/fetchUpComingBooking/:id').get(userAuth, fetchUpComeingBooking);
+router.route('/bookings').get(userAuth, fetchAllbookings);
+router.route('/bookings/:id').get(userAuth, getbookings);
+router.route('/complete-booking').post(userAuth, completeBooking);
 
-router.route('/getAvilablity/:barberId').get(checkAvailability)   //not completed
-router.route('/BookNow').post(AddBooking) // normal curd operation just add data to db
-
-
-router.route('/create-order').post(verifyToken,createOrder)
-router.route('/verifyPayment').post(verifyToken,verifyPayment)
-
-router.route('/dashboardIncome').get(findDashboardIncome)
-router.route('/getBarberFreeTime').post(barberFreeSlots)
-router.route('/fetchAllAvailableTimeSlots').post(fetchAllAvailableTimeSlots)
-router.route('/fetchUpComingBooking/:id').get(fetchUpComeingBooking)
-router.route('/bookings').get(fetchAllbookings)
-router.route('/bookings/:id').get(getbookings)
-router.route('/complete-booking').post(completeBooking)
-router.get('/discount', async (req, res) => {
+// Simplified discount API using the new userAuth middleware!
+router.get('/discount', userAuth, async (req, res) => {
   try {
-
-    const token = req.headers['authorization']?.split(' ')[1];
-
-    if (!token) {
-      return res.status(401).json({
-        success: false,
-        message: "No token provided"
-      });
-    }
-
-    const decoded = jwt.verify(token, secretkey);
-    const userId = decoded.id;
-
-    const user = await UserModel.findById(userId).select("referralDiscountAmount");
+    // req.userId is automatically populated by verifyToken
+    const user = await UserModel.findById(req.userId).select("referralDiscountAmount");
 
     if (!user) {
       return res.status(404).json({
@@ -60,14 +48,12 @@ router.get('/discount', async (req, res) => {
     });
 
   } catch (error) {
-    console.log("discount error",error)
-    return res.status(401).json({
+    console.log("discount error", error);
+    return res.status(500).json({
       success: false,
-      message: "Invalid token"
+      message: "Server internal error"
     });
   }
 });
-
-
 
 module.exports = router;

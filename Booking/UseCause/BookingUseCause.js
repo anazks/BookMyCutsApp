@@ -6,6 +6,7 @@ const mongoose = require('mongoose');
 const redisClient = require('../../Config/redis')
 const ShopModel = require('../../Shops/Model/ShopModel');
 const UserModel = require('../../Auth/Model/UserModel');
+const chalk = require('chalk');
 
 module.exports.checkAvailable = async (data) => { 
     try {
@@ -340,9 +341,11 @@ module.exports.bookingCompletion = async (details) => {
       totalPrice: Number(details.totalPrice || amount)
     });
 
+    console.log(chalk.greenBright.bold("✨ Booking Completed Successfully:"), chalk.cyanBright(JSON.stringify(updatedBooking, null, 2)));
+
     return updatedBooking;
   } catch (error) {
-    console.error('bookingCompletion error:', error);
+    console.error(chalk.redBright.bold('❌ bookingCompletion error:'), error);
     throw error;
   }
 }  

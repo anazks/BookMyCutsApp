@@ -1,18 +1,19 @@
 swagger: '3.0.0'
 info:
-  title: Users Model API
-  description: API related to Users models
+  title: Authentication & Users API
+  description: API endpoints related to authentication, user profiles, and admin/shop management defined in userRoute.js
   version: 1.0.0
-servers:
-  - url: http://localhost:3000
-    description: Local server
+
 paths:
-  /api/auth/user/register/:
+  # ----------------------------------------
+  # USER AUTHENTICATION APIs
+  # ----------------------------------------
+  /api/auth/user/register:
     post:
       summary: Register Users
-      description: Endpoint for registering users
+      description: Endpoint for registering a standard user
       tags:
-        - Users Model
+        - User
       requestBody:
         required: true
         content:
@@ -20,49 +21,21 @@ paths:
             schema:
               type: object
               properties:
-                firstName:
-                  type: string
-                  example: John
-                lastName:
-                  type: integer
-                  example: Doe
-                mobileNo:
-                  type: string
-                  example: "97545678"
-                password:
-                  type: string
-                  example: "123"
-                city:
-                  type: string
-                  example: "kochi"
-                role:
-                  type: string
-                  example: "user"
-                
+                firstName: { type: string, example: John }
+                lastName: { type: string, example: Doe }
+                mobileNo: { type: string, example: "9876543210" }
+                password: { type: string, example: "secure123" }
+                city: { type: string, example: "Kochi" }
+                role: { type: string, example: "user" }
       responses:
-        200:
-          description: Success response
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                    example: true
-                  message:
-                    type: string
-                    example: Registered user successfully
-                  result:
-                    type: string
-                    example: ''
-  /api/auth/user/login/:
+        200: { description: Success }
+
+  /api/auth/user/login:
     post:
-      summary: login Users
-      description: Endpoint for registering users
+      summary: Login Users
+      description: Endpoint for logging in users
       tags:
-        - Users Model
-      
+        - User
       requestBody:
         required: true
         content:
@@ -70,30 +43,375 @@ paths:
             schema:
               type: object
               properties:
-                mobileNo:
-                  type: string
-                  example: "97545678"
-                password:
-                  type: string
-                  example: "123"
-                
+                mobileNo: { type: string, example: "9876543210" }
+                password: { type: string, example: "secure123" }
       responses:
-        200:
-          description: Success response
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                    example: true
-                  message:
-                    type: string
-                    example:  user logged in successfully
-                  result:
-                    type: string
-                    example: ''
+        200: { description: Success }
+
+  /api/auth/user/google-signin:
+    post:
+      summary: Google Signin for Users
+      tags:
+        - User
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                token: { type: string }
+      responses:
+        200: { description: OK }
+
+  # ----------------------------------------
+  # SHOP OWNER AUTHENTICATION APIs
+  # ----------------------------------------
+  /api/auth/shop/register:
+    post:
+      summary: Register Shop Owner
+      tags:
+        - ShopOwner
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                mobileNo: { type: string }
+                password: { type: string }
+      responses:
+        200: { description: Success }
+
+  /api/auth/shop/login:
+    post:
+      summary: Login Shop Owner
+      tags:
+        - ShopOwner
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                mobileNo: { type: string }
+                password: { type: string }
+      responses:
+        200: { description: Success }
+
+  # ----------------------------------------
+  # COMMON AUTHENTICATION APIs
+  # ----------------------------------------
+  /api/auth/refresh-token:
+    post:
+      summary: Refresh Auth Token
+      tags:
+        - Common
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                token: { type: string }
+      responses:
+        200: { description: Success }
+
+  /api/auth/otpRequest:
+    post:
+      summary: Request OTP
+      tags:
+        - Common
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                mobileNo: { type: string }
+      responses:
+        200: { description: OTP Sent }
+
+  /api/auth/forgot-password:
+    post:
+      summary: Forgot Password
+      tags:
+        - Common
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                mobileNo: { type: string }
+      responses:
+        200: { description: OK }
+
+  /api/auth/verify-forgot-otp:
+    post:
+      summary: Verify Forgot Password OTP
+      tags:
+        - Common
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                mobileNo: { type: string }
+                otp: { type: string }
+      responses:
+        200: { description: OK }
+
+  /api/auth/reset-password:
+    post:
+      summary: Reset Password
+      tags:
+        - Common
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                mobileNo: { type: string }
+                password: { type: string }
+      responses:
+        200: { description: OK }
+
+  /api/auth/verifyOtp:
+    post:
+      summary: Verify Registration OTP
+      tags:
+        - Common
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                mobileNo: { type: string }
+                otp: { type: string }
+      responses:
+        200: { description: OK }
+
+  /api/auth/cities:
+    get:
+      summary: Get Nearby Cities
+      tags:
+        - Common
+      responses:
+        200: { description: OK }
+
+  /api/auth/register-push-token/{token}:
+    post:
+      summary: Save Notification Push Token
+      tags:
+        - Common
+      parameters:
+        - in: path
+          name: token
+          required: true
+          schema: { type: string }
+      responses:
+        200: { description: OK }
+
+  /api/auth/notification:
+    get:
+      summary: Fetch Notifications
+      tags:
+        - Common
+      security:
+        - JWT: []
+      responses:
+        200: { description: OK }
+
+  /api/auth/user/getProfile:
+    get:
+      summary: Get Profile Details for Logged In User
+      tags:
+        - Common
+      security:
+        - JWT: []
+      responses:
+        200: { description: OK }
+
+  /api/auth/confirm-arrival/{userId}:
+    post:
+      summary: Send Arrival Notification Check
+      tags:
+        - Common
+      parameters:
+        - in: path
+          name: userId
+          required: true
+          schema: { type: string }
+      responses:
+        200: { description: OK }
+
+  # ----------------------------------------
+  # ADMIN APIs
+  # ----------------------------------------
+  /api/auth/admin-registration:
+    post:
+      summary: Register Admin
+      tags:
+        - Admin
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        200: { description: OK }
+
+  /api/auth/admin-login:
+    post:
+      summary: Login Admin
+      tags:
+        - Admin
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email: { type: string }
+                password: { type: string }
+      responses:
+        200: { description: OK }
+
+  /api/auth/getAllUser:
+    get:
+      summary: Get All Users
+      tags:
+        - Admin
+      security:
+        - JWT: []
+      responses:
+        200: { description: OK }
+
+  /api/auth/deleteUser/{id}:
+    delete:
+      summary: Delete a User
+      tags:
+        - Admin
+      security:
+        - JWT: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        200: { description: OK }
+
+  /api/auth/viewAllShopOwners:
+    get:
+      summary: View All Shop Owners
+      tags:
+        - Admin
+      security:
+        - JWT: []
+      responses:
+        200: { description: OK }
+
+  /api/auth/shop-owner/{id}:
+    get:
+      summary: View Specific Shop Owner (Admin/Shop)
+      tags:
+        - Admin
+      security:
+        - JWT: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        200: { description: OK }
+    put:
+      summary: Update Specific Shop Owner
+      tags:
+        - Admin
+      security:
+        - JWT: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object }
+      responses:
+        200: { description: OK }
+    delete:
+      summary: Delete Specific Shop Owner
+      tags:
+        - Admin
+      security:
+        - JWT: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        200: { description: OK }
+
+  /api/auth/send-notification:
+    post:
+      summary: Send Custom Notification
+      tags:
+        - Admin
+      security:
+        - JWT: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object }
+      responses:
+        200: { description: OK }
+
+  /api/auth/customization:
+    get:
+      summary: Fetch App Customization
+      tags:
+        - Common
+      responses:
+        200: { description: OK }
+    post:
+      summary: Create App Customization
+      tags:
+        - Admin
+      security:
+        - JWT: []
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                backgroundImage:
+                  type: string
+                  format: binary
+      responses:
+        200: { description: OK }
 
 components:
   securitySchemes:

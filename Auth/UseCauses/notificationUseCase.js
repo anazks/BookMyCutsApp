@@ -17,8 +17,11 @@ module.exports.sendCustomNotificationUseCase = async (payload) => {
             };
         }
 
+        console.log(`Targeted ${users.length} users for audience: ${audience}`);
+
         const dbNotificationPayloads = [];
         const expoMessages = [];
+        let tokensFound = 0;
 
         // 2. Prepare data arrays
         for (const user of users) {
@@ -32,21 +35,34 @@ module.exports.sendCustomNotificationUseCase = async (payload) => {
                 data
             });
 
+            // Try both Capitalized and lowercase field names
+            const token = user.PushToken || user.pushToken;
+
             // Expo Push Notification Object
-            if (user.PushToken && Expo.isExpoPushToken(user.PushToken)) {
-                expoMessages.push({
-                    to: user.PushToken,
-                    sound: 'default',
-                    title,
-                    body,
-                    data
-                });
+            if (token) {
+                if (Expo.isExpoPushToken(token)) {
+                    tokensFound++;
+                    expoMessages.push({
+                        to: token,
+                        sound: 'default',
+                        title,
+                        body,
+                        data
+                    });
+                } else {
+                    console.warn(`Invalid Expo Push Token for user ${user._id}: ${token}`);
+                }
+            } else {
+                console.warn(`No PushToken or pushToken found for user ${user._id}`);
             }
         }
+
+        console.log(`Prepared ${expoMessages.length} expo messages out of ${users.length} targeted users. (Tokens found but valid: ${tokensFound})`);
 
         // 3. Save to Database in Bulk
         if (dbNotificationPayloads.length > 0) {
             await bulkCreateNotifications(dbNotificationPayloads);
+            console.log(`Created ${dbNotificationPayloads.length} notification records in DB.`);
         }
 
         // 4. Send the Push Notifications via Expo directly using Expo chunking
@@ -57,8 +73,17 @@ module.exports.sendCustomNotificationUseCase = async (payload) => {
             for (let chunk of chunks) {
                 try {
                     let ticketChunk = await expo.sendPushNotificationsAsync(chunk);
-                    sentCount += ticketChunk.length;
-                    // Note: In a production app you may want to evaluate ticket receipts for errors like DeviceNotRegistered
+                    console.log(`Sent chunk of ${chunk.length} notifications. Received ${ticketChunk.length} tickets.`);
+                    
+                    // Count how many were actually 'ok'
+                    for (let ticket of ticketChunk) {
+                        if (ticket.status === 'ok') {
+                            sentCount++;
+                        } else {
+                            console.error(`Expo notification error: ${ticket.message}`, ticket.details);
+                            errors.push(ticket.message);
+                        }
+                    }
                 } catch (error) {
                     console.error("Error sending expo chunk:", error);
                     errors.push(error.message);
@@ -68,7 +93,7 @@ module.exports.sendCustomNotificationUseCase = async (payload) => {
 
         return {
             success: true,
-            message: `Successfully created ${dbNotificationPayloads.length} DB records and sent ${sentCount} push notifications.`,
+            message: `Processed ${users.length} users. DB: ${dbNotificationPayloads.length}, Sent: ${sentCount}, Tokens Skip/Invalid: ${users.length - sentCount}`,
             sentCount,
             dbCreatedCount: dbNotificationPayloads.length,
             errors: errors.length > 0 ? errors : undefined

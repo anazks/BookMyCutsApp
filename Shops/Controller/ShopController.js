@@ -92,44 +92,70 @@ const AddShop = asyncHandler(async (req, res) => {
 
         console.log("Data with owner ID:", data);
 
-        let geocode = await convertToGeocode(data);
-        console.log("geocode:", geocode);
+        let geocode = null;
+        let usedFrontendCoords = false;
+        
+        // 1. Check if latitude/longitude are provided directly at top level
+        const hasDirectCoords = data.latitude !== undefined && data.longitude !== undefined &&
+                              !isNaN(Number(data.latitude)) && !isNaN(Number(data.longitude));
 
-        // Define fallback coordinates for Kanayannur / central Ernakulam area
-        // Most reliable from Wikipedia, Geodatos, etc.: ~9.9667 N, 76.2667 E
-        const fallbackLng = 76.2667;  // Longitude
-        const fallbackLat = 9.9667;   // Latitude
+        // 2. Check if ExactLocationCoord is provided in nested format
+        const hasNestedCoords = data.ExactLocationCoord && 
+                               data.ExactLocationCoord.type === 'Point' && 
+                               Array.isArray(data.ExactLocationCoord.coordinates) &&
+                               data.ExactLocationCoord.coordinates.length === 2 &&
+                               !isNaN(Number(data.ExactLocationCoord.coordinates[0])) &&
+                               !isNaN(Number(data.ExactLocationCoord.coordinates[1]));
 
-        // Always set the field – use real if valid, fallback otherwise
-        data.ExactLocationCoord = {
-            type: "Point",
-            coordinates: [
-                (geocode?.success && !isNaN(Number(geocode.longitude))
-                    ? Number(geocode.longitude)
-                    : fallbackLng),
-                (geocode?.success && !isNaN(Number(geocode.latitude))
-                    ? Number(geocode.latitude)
-                    : fallbackLat)
-            ]
-        };
+        if (hasDirectCoords || hasNestedCoords) {
+            if (hasDirectCoords && !hasNestedCoords) {
+                // Construct the GeoJSON Point from top-level coords
+                data.ExactLocationCoord = {
+                    type: "Point",
+                    coordinates: [Number(data.longitude), Number(data.latitude)]
+                };
+            }
+            console.log("✅ Using coordinates provided by frontend:", data.ExactLocationCoord);
+            usedFrontendCoords = true;
+        } else {
+            // Normal flow: Geocode location
+            geocode = await convertToGeocode(data);
+            console.log("geocode results:", geocode);
 
-        // Optional: Log when fallback is used (helpful for debugging)
-        if (!geocode?.success || isNaN(Number(geocode.longitude)) || isNaN(Number(geocode.latitude))) {
-            console.warn(`Geocode failed or invalid → using fallback coords: [${fallbackLng}, ${fallbackLat}]`);
+            // Define fallback coordinates for Kanayannur / central Ernakulam area
+            const fallbackLng = 76.2667;
+            const fallbackLat = 9.9667;
+
+            data.ExactLocationCoord = {
+                type: "Point",
+                coordinates: [
+                    (geocode?.success && !isNaN(Number(geocode.longitude))
+                        ? Number(geocode.longitude)
+                        : fallbackLng),
+                    (geocode?.success && !isNaN(Number(geocode.latitude))
+                        ? Number(geocode.latitude)
+                        : fallbackLat)
+                ]
+            };
+
+            if (!geocode?.success || isNaN(Number(geocode.longitude)) || isNaN(Number(geocode.latitude))) {
+                console.warn(`Geocode failed or invalid → using fallback coords: [${fallbackLng}, ${fallbackLat}]`);
+            }
         }
 
-        console.log("Final ExactLocationCoord:", data.ExactLocationCoord);
+        console.log("Final ExactLocationCoord for DB:", data.ExactLocationCoord);
 
         const shopAdded = await addShop(data);
         console.log("Shop added:", shopAdded);
 
         if (shopAdded) {
-            return res.status(201).json({  // 201 better for creation
+            return res.status(201).json({
                 success: true,
                 message: "Shop added successfully",
                 data: shopAdded,
                 geocode,
-                usedFallback: !geocode?.success
+                usedFallback: !usedFrontendCoords && !geocode?.success,
+                usedFrontendCoords
             });
         } else {
             return res.status(500).json({

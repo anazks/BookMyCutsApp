@@ -4,6 +4,46 @@ const UserModel = require('../../Auth/Model/UserModel');
 const ShoperModel = require('../../Auth/Model/ShoperModel');
 const ShopModel = require('../Model/ShopModel');
 const BookingModel = require('../../Booking/Models/BookingModel');
+const TransactionLog = require('../../Booking/Models/TransactionLogModel');
+
+module.exports.fetchTransactionLogs = async ({ page = 1, limit = 20, stage, status, startDate, endDate, sortBy = 'createdAt', sortOrder = -1 }) => {
+    const filter = {};
+
+    if (stage) filter.stage = stage;
+    if (status) filter.status = status;
+
+    if (startDate || endDate) {
+        filter.createdAt = {};
+        if (startDate) filter.createdAt.$gte = new Date(startDate);
+        if (endDate) filter.createdAt.$lte = new Date(endDate);
+    }
+
+    const skip = (page - 1) * limit;
+    const sort = { [sortBy]: Number(sortOrder) };
+
+    const [logs, totalCount] = await Promise.all([
+        TransactionLog.find(filter)
+            .sort(sort)
+            .skip(skip)
+            .limit(limit)
+            .populate('userId', 'name email phone')
+            .populate('bookingId', 'bookingDate totalPrice status')
+            .lean(),
+        TransactionLog.countDocuments(filter)
+    ]);
+
+    return {
+        logs,
+        pagination: {
+            currentPage: page,
+            totalPages: Math.ceil(totalCount / limit),
+            totalCount,
+            limit,
+            hasNextPage: page < Math.ceil(totalCount / limit),
+            hasPrevPage: page > 1
+        }
+    };
+};
 
 module.exports.fetchDashboardStats = async () => {
     try {

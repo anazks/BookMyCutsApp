@@ -8,6 +8,7 @@ const { trace } = require('../Router/BookingRouter');
 const crypto = require('crypto'); // CommonJS
 const RazorpayClass = require('razorpay'); // Import the class for static methods
 const BookingModel = require('../Models/BookingModel');
+const TransactionLog = require('../Models/TransactionLogModel');
 const ShopModel = require('../../Shops/Model/ShopModel')
 const PayoutRequest = require('../../Shops/Model/PayoutRequest');
 const Offer = require('../../Offers/Model/Offer');
@@ -15,6 +16,7 @@ const Offer = require('../../Offers/Model/Offer');
 
 
 const nodemailer = require('nodemailer');
+const chalk = require('chalk');
 
 
 
@@ -89,6 +91,25 @@ const createOrder = async (req, res) => {
     };
 
     const order = await RazorPay.orders.create(options);
+    console.log(chalk.greenBright.bold("✨ Razorpay Order Created Successfully: "), chalk.cyanBright(order.id));
+
+    // Log the transaction stage
+    await TransactionLog.create({
+      razorpayOrderId: order.id,
+      amount: amountToPay,
+      stage: 'ORDER_CREATED',
+      status: 'PENDING',
+      requestPayload: req.body,
+      responsePayload: order
+    }).catch(err => console.error(chalk.redBright("❌ Failed to log ORDER_CREATED stage:"), err.message));
+
+    console.log(chalk.magentaBright("Payment details before response:"), {
+      originalServiceAmount: amount,
+      discountAmount,
+      platformFee,
+      amountToPay,
+      finalAmount: amountToPay
+    });
 
     res.status(200).json({
       ...order,
@@ -99,8 +120,17 @@ const createOrder = async (req, res) => {
       finalAmount: amountToPay // The actual amount charged to Razorpay
     });
   } catch (err) {
-    console.log("FULL RAZORPAY ERROR:", JSON.stringify(err, null, 2));
-    console.error("Order Creation Error:", err);
+    console.log(chalk.redBright.bold("❌ FULL RAZORPAY ERROR:"), chalk.yellowBright(JSON.stringify(err, null, 2)));
+    console.error(chalk.redBright("Order Creation Error:"), err);
+
+    await TransactionLog.create({
+      amount: req.body?.amount,
+      stage: 'ORDER_CREATION_FAILED',
+      status: 'FAILED',
+      requestPayload: req.body,
+      errorMessage: err.message
+    }).catch(logErr => console.error(chalk.redBright("❌ Failed to log ORDER_CREATION_FAILED stage:"), logErr.message));
+
     res.status(500).json({
       error: 'Order creation failed',
       details: err.message
@@ -180,7 +210,7 @@ const createOrder = async (req, res) => {
 
 
 const verifyPayment = async (req, res) => {
-  console.log("verify payment started...");
+  console.log(chalk.magentaBright.bold("🔍 Verify payment started..."));
   try {
     const {
       razorpay_payment_id,
@@ -192,6 +222,17 @@ const verifyPayment = async (req, res) => {
       email
     } = req.body;
 
+    // Log verification attempt
+    await TransactionLog.create({
+      bookingId: bookingId || null,
+      razorpayOrderId: razorpay_order_id || null,
+      razorpayPaymentId: razorpay_payment_id || null,
+      amount: amount || 0,
+      stage: 'VERIFICATION_ATTEMPT',
+      status: 'PENDING',
+      requestPayload: req.body
+    }).catch(err => console.error(chalk.redBright("❌ Failed to log VERIFICATION_ATTEMPT:"), err.message));
+
     if (!razorpay_payment_id || !razorpay_order_id || !razorpay_signature) {
       // If the checkout is abandoned, we need to cancel the booking to free the slot
       if (bookingId) {
@@ -200,6 +241,15 @@ const verifyPayment = async (req, res) => {
           paymentStatus: 'unpaid'
         });
       }
+      console.log(chalk.redBright.bold("❌ Missing fields or payment abandoned."));
+      await TransactionLog.create({
+        bookingId: bookingId || null,
+        razorpayOrderId: razorpay_order_id || null,
+        stage: 'VERIFICATION_FAILED',
+        status: 'FAILED',
+        errorMessage: 'Missing required fields or payment failed/abandoned',
+        requestPayload: req.body
+      }).catch(err => console.error(chalk.redBright("❌ Failed to log VERIFICATION_FAILED:"), err.message));
       return res.status(400).json({ success: false, message: 'Missing required fields or payment failed/abandoned' });
     }
 
@@ -214,6 +264,16 @@ const verifyPayment = async (req, res) => {
         bookingStatus: 'cancelled',
         paymentStatus: 'unpaid'
       });
+      console.log(chalk.redBright.bold("❌ Signature mismatch for order:"), chalk.yellowBright(razorpay_order_id));
+      await TransactionLog.create({
+        bookingId: bookingId || null,
+        razorpayOrderId: razorpay_order_id || null,
+        razorpayPaymentId: razorpay_payment_id || null,
+        stage: 'VERIFICATION_FAILED',
+        status: 'FAILED',
+        errorMessage: 'Invalid signature',
+        requestPayload: req.body
+      }).catch(err => console.error(chalk.redBright("❌ Failed to log VERIFICATION_FAILED:"), err.message));
       return res.status(400).json({ success: false, message: 'Invalid signature' });
     }
 
@@ -277,9 +337,21 @@ const verifyPayment = async (req, res) => {
         type: 'earning',
         status: 'pending'
       });
-      console.log(`✅ Ledger Entry Created: Service ₹${totalServicePrice} | Bonus ₹${salonBonus} | Total Entry: ₹${salonPayoutAmount}`);
+      console.log(chalk.greenBright(`✅ Ledger Entry Created: Service ₹${totalServicePrice} | Bonus ₹${salonBonus} | Total Entry: ₹${salonPayoutAmount}`));
     }
     // --- PAYOUT & LEDGER LOGIC END ---
+
+    console.log(chalk.greenBright.bold("✅ Payment Verification Successful! Order:"), chalk.cyanBright(razorpay_order_id));
+    await TransactionLog.create({
+      bookingId: bookingId,
+      razorpayOrderId: razorpay_order_id,
+      razorpayPaymentId: razorpay_payment_id,
+      amount: currentAmountPaid,
+      stage: 'VERIFICATION_SUCCESS',
+      status: 'SUCCESS',
+      requestPayload: req.body,
+      responsePayload: { platformFee: platformFeeTotal, salonPayoutAmount }
+    }).catch(err => console.error(chalk.redBright("❌ Failed to log VERIFICATION_SUCCESS:"), err.message));
 
     // --- TRIGGER QUEUE START ---
     // We trigger the payout queue only if money was actually received
@@ -333,7 +405,7 @@ const verifyPayment = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Payment verification error:', error);
+    console.error(chalk.redBright.bold('❌ Payment verification error:'), error);
     return res.status(500).json({ success: false, message: 'Internal server error', error: error.message });
   }
 };
@@ -784,14 +856,22 @@ const razorpayWebhook = async (req, res) => {
     // Ensure we have the raw body for verification
     const bodyToVerify = req.rawBody;
 
-    console.log("--- RAZORPAY WEBHOOK ATTEMPT ---");
-    console.log("Signature Header:", !!signature);
-    console.log("Webhook Secret Valid:", !!secret && secret.length > 0);
+    console.log(chalk.magentaBright.bold("--- 🔔 RAZORPAY WEBHOOK RECEIVED ---"));
+    console.log(chalk.cyanBright("Event Type:"), chalk.yellowBright(req.body?.event));
+    
+    await TransactionLog.create({
+      stage: 'WEBHOOK_RECEIVED',
+      status: 'PENDING',
+      requestPayload: req.body
+    }).catch(err => console.error(chalk.redBright("❌ Failed to log WEBHOOK_RECEIVED:"), err.message));
+
+    console.log(chalk.cyanBright("Signature Header:"), !!signature);
+    console.log(chalk.cyanBright("Webhook Secret Valid:"), !!secret && secret.length > 0);
     if (secret) {
-        console.log(`Webhook Secret Length: ${secret.length}`);
-        console.log(`Webhook Secret starts with: ${secret.substring(0, 3)}... and ends with: ...${secret.substring(secret.length - 3)}`);
+        console.log(chalk.cyanBright(`Webhook Secret Length: ${secret.length}`));
+        console.log(chalk.cyanBright(`Webhook Secret starts with: ${secret.substring(0, 3)}... and ends with: ...${secret.substring(secret.length - 3)}`));
     }
-    console.log("Raw Body Available:", !!bodyToVerify);
+    console.log(chalk.cyanBright("Raw Body Available:"), !!bodyToVerify);
 
     if (!signature || !secret) {
       if (!secret) {
@@ -833,9 +913,12 @@ const razorpayWebhook = async (req, res) => {
     const eventType = req.body.event;
     const bookingId = req.body.payload?.payment?.entity?.notes?.bookingId;
     
-    console.log(`Event Type: ${eventType} | Booking ID: ${bookingId}`);
+    console.log(chalk.cyanBright(`Event Type: ${eventType} | Booking ID: ${bookingId}`));
     
     if (eventType === 'payment.failed') {
+      const errorReason = req.body.payload?.payment?.entity?.error_description || 'Unknown error';
+      console.log(chalk.redBright.bold(`❌ Payment Failed Webhook: ${errorReason}`));
+
       if (bookingId) {
         const updated = await BookingModel.findByIdAndUpdate(
           bookingId, 
@@ -846,13 +929,23 @@ const razorpayWebhook = async (req, res) => {
           { new: true }
         );
         if (updated) {
-          console.log(`✅ Booking ${bookingId} successfully marked as FAILED/CANCELLED.`);
+          console.log(chalk.greenBright(`✅ Booking ${bookingId} successfully marked as FAILED/CANCELLED.`));
         } else {
-          console.warn(`⚠️ Webhook received for booking ${bookingId} but it was not found in DB.`);
+          console.warn(chalk.yellowBright(`⚠️ Webhook received for booking ${bookingId} but it was not found in DB.`));
         }
       } else {
-        console.warn("⚠️ Webhook 'payment.failed' received but no bookingId found in notes.");
+        console.warn(chalk.yellowBright("⚠️ Webhook 'payment.failed' received but no bookingId found in notes."));
       }
+
+      await TransactionLog.create({
+        bookingId: bookingId || null,
+        razorpayPaymentId: req.body.payload?.payment?.entity?.id || null,
+        razorpayOrderId: req.body.payload?.payment?.entity?.order_id || null,
+        stage: 'WEBHOOK_FAILED_EVENT',
+        status: 'FAILED',
+        errorMessage: errorReason,
+        requestPayload: req.body
+      }).catch(err => console.error(chalk.redBright("❌ Failed to log WEBHOOK_FAILED_EVENT:"), err.message));
     }
 
     return res.status(200).json({ success: true, message: "Webhook processed" });
