@@ -1,0 +1,148 @@
+const mongoose = require('mongoose');
+
+const bookingSchema = new mongoose.Schema({
+  barberId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Barabar',
+    required: true
+  },
+  userId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    required: true
+  },
+  shopId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref:'Shop',
+    required: true
+  },
+  shopOwnerId:{
+    type: mongoose.Schema.Types.ObjectId,
+    ref:"shopOwner"
+  },
+
+  serviceIds: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Service'
+  }],
+  services: [{
+    id: mongoose.Schema.Types.ObjectId,
+    name: String,
+    price: Number,
+    duration: Number
+  }],
+
+  // bookingDate: String,
+  // timeSlotId: Number,
+  // timeSlotName: String,
+
+  bookingDate:{
+    type:Date,
+    required:true
+  },
+
+  timeSlot: {
+    startingTime: {
+      type: Date,
+      required: true
+    },
+    endingTime: {
+      type: Date,
+      required: true
+    }
+  },
+
+  totalPrice: Number,
+  totalDuration: Number,
+
+  paymentType: {
+    type: String,
+    enum: ['advance', 'full', 'cod']
+  },
+  amountToPay: Number,
+  remainingAmount: Number,
+  currency: String,
+  appliedOffer: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Offer'
+  },
+  discountAmount: {
+    type: Number,
+    default: 0
+  },
+  basePrice: Number, // Original price before discount
+
+  bookingTimestamp: {
+    type: Date,
+    default: Date.now
+  },
+
+  bookingStatus: {
+    type: String,
+    enum: ['pending', 'confirmed', 'completed', 'cancelled'],
+    default: 'pending'
+  },
+  paymentId:{
+    type:String,
+    default:"not added"
+  },
+  razorpayOrderId: {
+    type: String,
+  },
+  paymentStatus: {
+    type: String,
+    enum: ['unpaid', 'partial', 'paid', 'refunded','failed'],
+    default: 'unpaid'
+  },
+  amountPaid: {
+    type: Number,
+    default: 0
+  },
+  platformFee: {
+  type: Number,
+  default: 20
+},
+companyShare: {
+  type: Number,
+  default: 15
+},
+
+salonBonus: {
+  type: Number,
+  default: 5
+},
+
+salonPayoutAmount: {
+  type: Number
+},
+salonServicePrice: {
+  type: Number,
+  default: 0
+},
+salonServiceCharge: {
+  type: Number,
+  default: 0
+},
+collectedBy: {
+  type: String,
+  enum: ['platform', 'shop'],
+  default: 'shop'
+},
+
+payoutStatus: {
+  type: String,
+  enum: ['pending', 'completed', 'failed', 'processing'],
+  default: 'pending'
+},
+
+payoutId: {
+  type: String
+},
+
+  createdAt: {
+    type: Date,
+    default: Date.now
+  }
+});
+
+module.exports = mongoose.model('Booking', bookingSchema);

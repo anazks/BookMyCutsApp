@@ -1,0 +1,263 @@
+const UserModel = require("../Model/UserModel")
+const shoperModel = require('../Model/ShoperModel')
+const asyncHandler = require("express-async-handler");
+const { userLogin } = require("../Controllers/AuthController");
+const otpModel = require("../Model/OtpModel");
+const ShoperModel = require("../Model/ShoperModel");
+const ShopModel = require("../../Shops/Model/ShopModel");
+const AdminModel = require("../Model/AdminModel")
+const City = require("../Model/City")
+
+module.exports.createUser = asyncHandler(async (data)=>{
+    try {
+        console.log("saving user now")
+        const user = await UserModel.create(data);
+        console.log('user saved successful')
+        return user
+    } catch (error) { 
+        console.error(error)
+    }
+})
+
+module.exports.findUserByEmail = asyncHandler(async(data) => {
+    let {email} = data;
+    console.log(email, "email in rep####");
+    return await UserModel.findOne({email: email});
+});
+
+module.exports.createShoper = asyncHandler(async (data)=>{
+    return await shoperModel.create(data)
+})
+module.exports.findShoper = asyncHandler(async (data) => {
+  const { email } = data;
+  console.log(email, "email----------------------")
+  const user = await shoperModel.findOne({ email });
+
+  if (!user) {
+    throw new Error("User not found");
+  }
+  const shop = await ShopModel.findOne({ ShopOwnerId: user._id });
+ 
+  return {
+    user,
+    shopId: shop?._id ?? null,
+  };
+});
+module.exports.getUserProfile = asyncHandler(async (data) => {
+    try {
+       let  user = await UserModel.findById({_id:data.id}); 
+       return user;
+    } catch (error) {
+        return res.status(500).json({ message: 'Error fetching profile' });
+    }
+}) 
+
+module.exports.deleteUserFunction = async (userId) => {
+    try {
+        const user = UserModel.findByIdAndDelete(userId)
+        return user
+    } catch (error) {
+        console.error(error)
+    }
+}
+
+module.exports.getAllShopOwners = async (page, limit) => {
+  try {
+    // 🔹 If page & limit are NOT provided → fetch all shop owners
+    if (!page || !limit) {
+      const shopOwners = await ShoperModel.find()
+        .sort({ createdAt: -1 })
+        .lean();
+
+      const totalShopOwners = shopOwners.length;
+
+      return { shopOwners, totalShopOwners };
+    }
+
+    // 🔹 If page & limit ARE provided → paginated fetch
+    const skip = (page - 1) * limit;
+
+    const [shopOwners, totalShopOwners] = await Promise.all([
+      ShoperModel.find()
+        .skip(skip)
+        .limit(limit)
+        .sort({ createdAt: -1 })
+        .lean(),
+
+      ShoperModel.countDocuments(),
+    ]);
+
+    return { shopOwners, totalShopOwners };
+  } catch (error) {
+    console.error("Error fetching shop owners:", error);
+    throw error;
+  }
+};
+
+
+module.exports.updatePassword = async (password, email, role) => {
+  try {
+    let model;
+
+    if (role === 'user') {
+      model = UserModel;
+    } else if (role === 'shopper') {
+      model = ShoperModel;
+    } else {
+      throw new Error('Invalid role');
+    }
+
+    const updatedUser = await model.findOneAndUpdate(
+      { email: email },           // 🔍 find by email
+      { $set: { password } },     // 🔐 update password
+      { new: true }               // return updated doc
+    );
+
+    return updatedUser;
+  } catch (error) {
+    console.error('Update password error:', error);
+    throw error;
+  }
+};
+
+module.exports.fetchUsers = async (page,limit) => {
+  try {
+    const skip = (page - 1) * limit
+    const users = await shoperModel.find({}).
+                     sort({ createdAt:-1}).
+                                skip(skip).
+                              limit(limit)
+    return users                        
+  } catch (error) {
+    console.log(error)
+  }
+}
+
+module.exports.findUserById = async (userId) => {
+  try {
+    console.log(userId, "userId");
+    let owner = await UserModel.findById(userId);
+    
+    // If not found in UserModel, search in ShoperModel (for shop owners)
+    if (!owner) {
+      owner = await shoperModel.findById(userId);
+    }
+
+    if (!owner) {
+      console.error(`No user found with ID: ${userId}`);
+      return null;
+    }
+    const shop = await ShopModel.findOne({
+      ShopOwnerId: owner._id
+    });
+    console.log("shop:",shop)
+ return {
+  owner,
+  shopId: shop?._id  // optional chaining in case shop is null
+};
+  } catch (error) {
+    console.error("findUser error:", error);
+    throw error;
+  }
+};
+
+
+module.exports.deleteShopOwner = async (userId) => {
+  try {
+    const user = await shoperModel.findByIdAndDelete(userId)
+    return  user
+  } catch (error) {
+    console.log(error)
+  }
+}
+
+module.exports.modifyShopOwner = async (userId, updatedData) => {
+  try {
+    // { new: true } returns the updated document
+      const updatedUser = await shoperModel.findByIdAndUpdate(
+      userId,
+      updatedData,        // object containing fields to update
+      { new: true, runValidators: true } // returns updated doc and validates fields
+    );
+    
+    console.log(updatedUser, "shop owner data")
+  
+
+    return updatedUser;
+  } catch (error) {
+    console.log(error);
+    throw error;
+  }
+};
+
+module.exports.isUserIsNew = async (userData) => {
+  try {
+     const user = await UserModel.findOne({email: userData.email})
+     if(!user){
+       const newUser = await UserModel.create(userData)
+     }
+     return user
+  } catch (error) {
+    console.log(error)
+  }
+}
+
+module.exports.findAdminByUserName = asyncHandler(async(data) => {
+    let {userName} = data;
+    console.log(userName, "userName in rep####");
+    return await AdminModel.findOne({userName: userName});
+});
+
+module.exports.getNearestCities = async (userLat, userLon, limit = 8) => {
+  try {
+    // Validate input
+    if (typeof userLat !== 'number' || typeof userLon !== 'number') {
+      throw new Error('Invalid coordinates: lat and lon must be numbers');
+    }
+
+    const userPoint = {
+      type: 'Point',
+      coordinates: [userLon, userLat] // GeoJSON order: [longitude, latitude]
+    };
+
+    const cities = await City.aggregate([
+      {
+        $geoNear: {
+          near: userPoint,
+          distanceField: 'distance',         // adds distance in meters
+          spherical: true,                   // use spherical geometry (Earth)
+          maxDistance: 500000,               // optional: limit to ~500km (adjust if needed)
+          key: 'location'                    // the field with 2dsphere index
+        }
+      },
+      {
+        $limit: limit                      // get only top 8 nearest
+      },
+      {
+        $project: {
+          name: 1,
+          state: 1,
+          distance: 1,
+          lat: { $arrayElemAt: ['$location.coordinates', 1] },
+          lon: { $arrayElemAt: ['$location.coordinates', 0] },
+          _id: 0
+        }
+      }
+    ]);
+
+    // Optional: convert distance from meters to km and round
+    const formatted = cities.map(city => ({
+      name: city.name,
+      state: city.state,
+      lat: city.lat,
+      lon: city.lon,
+      distanceKm: Math.round(city.distance / 1000) // meters → km
+    }));
+
+    return formatted;
+  } catch (error) {
+    console.error('Error finding nearest cities:', error);
+    throw error;
+  }
+}
+

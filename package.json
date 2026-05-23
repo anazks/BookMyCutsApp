@@ -1,0 +1,51 @@
+{
+  "name": "bookmycut",
+  "version": "1.0.0",
+  "main": "app.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node app.js",
+    "dev": "nodemon app.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "ajv": "^8.12.0",
+    "axios": "^1.13.6",
+    "bcryptjs": "^3.0.3",
+    "bullmq": "^5.70.4",
+    "chalk": "^4.1.2",
+    "cloudinary": "^2.9.0",
+    "compression": "^1.8.1",
+    "cors": "^2.8.5",
+    "crypto": "^1.0.1",
+    "dotenv": "^16.4.5",
+    "expo-server-sdk": "^6.1.0",
+    "express": "^4.21.1",
+    "express-async-handler": "^1.2.0",
+    "express-session": "^1.19.0",
+    "firebase-admin": "^13.8.0",
+    "google-auth-library": "^10.5.0",
+    "ioredis": "^5.10.0",
+    "jsonwebtoken": "^9.0.2",
+    "mongoose": "^8.2.2",
+    "multer": "^2.0.2",
+    "node-cron": "^4.2.1",
+    "nodemailer": "^7.0.12",
+    "razorpay": "^2.9.6",
+    "razorpayx-nodejs-sdk": "^2.0.4",
+    "redis": "^5.10.0",
+    "streamifier": "^0.1.1",
+    "swagger-jsdoc": "^6.2.8",
+    "swagger-ui-express": "^5.0.0",
+    "tail": "^2.2.6",
+    "twilio": "^5.8.2",
+    "winston": "^3.19.0",
+    "winston-mongodb": "^7.0.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.7"
+  }
+}

@@ -1,0 +1,24 @@
+--- ALL SHOPS ---
+There are 2 active shops.
+There are 0 inactive shops.
+There are 3 shops with no isActive field.
+
+Shop: Lavender
+isActive: true
+Owner: anaz (Google? No auth provider field)
+
+Shop: Cutzz
+isActive: true
+Owner: Govind  (Google? No auth provider field)
+
+Shop: Lavender
+isActive: undefined
+Owner: Anaz (Google? No auth provider field)
+
+Shop: Royal Saloon
+isActive: undefined
+Owner: anaz (Google? No auth provider field)
+
+Shop: Cuts Lab
+isActive: undefined
+Owner: Govind (Google? No auth provider field)

@@ -1,0 +1,18 @@
+{
+  "expo": {
+    "extra": {
+      "eas": {
+        "projectId": "2fdcfcb7-a7ff-491f-8aed-c19caaad5b76"
+      }
+    },
+    "android": {
+      "package": "com.govind3225.bookmycut"
+    },
+    "ios": {
+      "bundleIdentifier": "com.govind3225.bookmycut",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    }
+  }
+}

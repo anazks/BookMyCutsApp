@@ -1,0 +1,17 @@
+version: '3.8'
+
+services:
+  redis:
+    image: redis:latest
+    restart: always
+
+  app:
+    build: .
+    restart: always
+    ports:
+      - "5000:5000"    # Access your app directly at http://localhost:5000
+    env_file: .env
+    environment:
+      - REDIS_URL=redis://redis:6379
+    depends_on:
+      - redis

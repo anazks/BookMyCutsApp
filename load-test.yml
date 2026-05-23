@@ -1,0 +1,15 @@
+config:
+  target: "http://127.0.0.1" # The Kubernetes/Docker Load Balancer port
+  phases:
+    - duration: 30       # Run the test for 30 seconds
+      arrivalRate: 10    # 10 virtual users per second
+      name: "Warm up phase"
+    - duration: 60       # Run for 60 seconds
+      arrivalRate: 50    # 50 virtual users per second!
+      name: "Sustained max load"
+
+scenarios:
+  - name: "Hit the database read route"
+    flow:
+      - get:
+          url: "/api/shop/cities" # Hits your app.get('/') route

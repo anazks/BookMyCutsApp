@@ -1,0 +1,37 @@
+swagger: '3.0.0'
+info:
+  title: Admin APIs
+  description: API endpoints designated for Administrators
+  version: 1.0.0
+paths:
+  /api/auth/getAllUser:
+    get:
+      summary: Get All Users
+      description: Retrieve a list of all users registered in the system. Admin access only.
+      tags:
+        - Admin
+      security:
+        - JWT: []
+      responses:
+        200:
+          description: Successfully retrieved users list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  users:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        firstName:
+                          type: string
+                          example: "John"
+        401:
+          description: Unauthorized
+        403:
+          description: Forbidden - Admin role required

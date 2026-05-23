@@ -17,7 +17,6 @@ const os = require('os');
 app.use((req, res, next) => {
     // This logs the unique ID of the specific Kubernetes Pod handling the request
     if (req.url === '/' || req.url.startsWith('/api')) {
-        // console.log(`[Pod ID: ${os.hostname()}] Handled -> ${req.method} ${req.url}`);
     }
     next();
 });

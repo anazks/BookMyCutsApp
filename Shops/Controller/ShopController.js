@@ -1,0 +1,1831 @@
+const asyncHandler = require("express-async-handler");
+const jwt = require('jsonwebtoken');
+const SaveProfileToCloud = require('../CloudStorageCurds/SaveProfileToCloude')
+const { modifyShop, fetchShop, fetchBarberseByShopId, fetchServiceByShopId, fetchBarbersByShopId, LocationAndNameOfOwner } = require('../Repo/ShopRepo')
+const secretkey = process.env.secretKey;
+const ServiceModel = require('../Model/ServiceModel')
+const BarbarModel = require('../Model/BarbarModel')
+const mongoose = require('mongoose');
+const razorpay = require('../../Razorpay/RazorpayConfig');
+const crypto = require('crypto');
+
+const {
+    updateBankDetailsFunction,
+    saveBankDetailsFunction,
+    addShop,
+    viewAllShops,
+    addServices,
+    viewAllServices,
+    addBarbers,
+    viewAllBarbers,
+    getAShop,
+    getMyService,
+    getMyBarbers,
+    getAllBookingsOfShop,
+    getShopUser,
+    getMyshop,
+    getShopService,
+    getShopBarbers,
+    editBarberProfile,
+    deleteBarberFunction,
+    makePremiumFunction,
+    getAllPremiumShopsFunction,
+    viewbankDetailsFunction,
+    deleteBankdetailsFunction,
+    editServiceFunction,
+    deleteServiceFunction,
+    deleteShopFuntion,
+    findNearbyShopsFunction,
+    deleteMediaFile,
+    updateMediaDetailsFunction,
+    getUniqueService,
+    filterShopsByServiceFunction,
+    getUniqueCitiesFromShops,
+    verifyShopFunction,
+    viewAllShopsForAdmin
+} = require('../Repo/ShopRepo');
+const Decoder = require("../../TokenDecoder/Decoder");
+const { json } = require("express");
+const { convertToGeocode, findNearestShops } = require('../UseCase/useCaseShop');
+const { TrunkContextImpl } = require("twilio/lib/rest/routes/v2/trunk");
+const ShopModel = require("../Model/ShopModel");
+const BookingModel = require("../../Booking/Models/BookingModel");
+const { error } = require("ajv/dist/vocabularies/applicator/dependencies");
+
+
+const updateShopActiveStatus = async (shopId) => {
+    if (!shopId) {
+        throw new Error("shopId is required");
+    }
+
+    const [barberCount, serviceCount] = await Promise.all([
+        BarbarModel.countDocuments({ shopId }),
+        ServiceModel.countDocuments({ shopId })
+    ]);
+    
+    const isActive = barberCount > 0 && serviceCount > 0;
+
+    await ShopModel.findByIdAndUpdate(shopId, {
+        isActive
+    });
+
+    return isActive;
+};
+
+
+const AddShop = asyncHandler(async (req, res) => {
+    const data = req.body;
+    console.log("Data received for adding shop:", data);
+
+    if (!data) {
+        return res.status(400).json({
+            success: false,
+            message: "No shop data provided"
+        });
+    }
+
+    const token = req.headers['authorization']?.split(' ')[1];
+    if (!token) {
+        return res.status(401).json({
+            success: false,
+            message: "No token provided"
+        });
+    }
+
+    try {
+        const decoded = jwt.verify(token, secretkey);
+        req.userId = decoded.id;
+        data.ShopOwnerId = req.userId;
+
+        console.log("Data with owner ID:", data);
+
+        let geocode = null;
+        let usedFrontendCoords = false;
+
+        // 1. Check if latitude/longitude are provided directly at top level
+        const hasDirectCoords = data.latitude !== undefined && data.longitude !== undefined &&
+            !isNaN(Number(data.latitude)) && !isNaN(Number(data.longitude));
+
+        // 2. Check if ExactLocationCoord is provided in nested format
+        const hasNestedCoords = data.ExactLocationCoord &&
+            data.ExactLocationCoord.type === 'Point' &&
+            Array.isArray(data.ExactLocationCoord.coordinates) &&
+            data.ExactLocationCoord.coordinates.length === 2 &&
+            !isNaN(Number(data.ExactLocationCoord.coordinates[0])) &&
+            !isNaN(Number(data.ExactLocationCoord.coordinates[1]));
+
+        if (hasDirectCoords || hasNestedCoords) {
+            if (hasDirectCoords && !hasNestedCoords) {
+                // Construct the GeoJSON Point from top-level coords
+                data.ExactLocationCoord = {
+                    type: "Point",
+                    coordinates: [Number(data.longitude), Number(data.latitude)]
+                };
+            }
+            console.log("✅ Using coordinates provided by frontend:", data.ExactLocationCoord);
+            usedFrontendCoords = true;
+        } else {
+            // Normal flow: Geocode location
+            geocode = await convertToGeocode(data);
+            console.log("geocode results:", geocode);
+
+            // Define fallback coordinates for Kanayannur / central Ernakulam area
+            const fallbackLng = 76.2667;
+            const fallbackLat = 9.9667;
+
+            data.ExactLocationCoord = {
+                type: "Point",
+                coordinates: [
+                    (geocode?.success && !isNaN(Number(geocode.longitude))
+                        ? Number(geocode.longitude)
+                        : fallbackLng),
+                    (geocode?.success && !isNaN(Number(geocode.latitude))
+                        ? Number(geocode.latitude)
+                        : fallbackLat)
+                ]
+            };
+
+            if (!geocode?.success || isNaN(Number(geocode.longitude)) || isNaN(Number(geocode.latitude))) {
+                console.warn(`Geocode failed or invalid → using fallback coords: [${fallbackLng}, ${fallbackLat}]`);
+            }
+        }
+
+        console.log("Final ExactLocationCoord for DB:", data.ExactLocationCoord);
+        
+        const shopAdded = await addShop(data);
+        console.log("Shop added:", shopAdded);
+
+        if (shopAdded) {
+            return res.status(201).json({
+                success: true,
+                message: "Shop added successfully",
+                data: shopAdded,
+                geocode,
+                usedFallback: !usedFrontendCoords && !geocode?.success,
+                usedFrontendCoords
+            });
+        } else {
+            return res.status(500).json({
+                success: false,
+                message: "Failed to add shop"
+            });
+        }
+
+    } catch (error) {
+        console.error("Error in AddShop:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Server error",
+            error: error.message
+        });
+    }
+});
+
+
+const ViewAllShop = asyncHandler(async (req, res) => {
+    try {
+        // Parse query params
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 10;
+        const sort = req.query.sort || 'createdAt';
+        const order = req.query.order || 'desc';
+        const city = req.query.city || '';
+        const lat = req.query.lat;
+        const lng = req.query.lng;
+
+        // Fetch paginated shops and unique cities in parallel
+        const [result, cities] = await Promise.all([
+            viewAllShops({ page, limit, sort, order, city, lat, lng }),
+            getUniqueCitiesFromShops()
+        ]);
+
+        if (!result.shops || result.shops.length === 0) {
+            return res.status(200).json({
+                success: true,
+                message: "No shops found",
+                data: [],
+                cities,
+                pagination: {
+                    currentPage: page,
+                    totalPages: 0,
+                    totalShops: 0,
+                    hasNextPage: false,
+                    hasPreviousPage: false,
+                    limit
+                }
+            });
+        }
+
+        return res.status(200).json({
+            success: true,
+            message: "Shops retrieved successfully",
+            data: result.shops,
+            cities,
+            pagination: {
+                currentPage: page,
+                totalPages: result.totalPages,
+                totalShops: result.totalShops,
+                hasNextPage: page < result.totalPages,
+                hasPreviousPage: page > 1,
+                limit
+            }
+        });
+    } catch (error) {
+        console.error("Error fetching shops:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Internal server error"
+        });
+    }
+});
+
+const fetchAllShopsForAdmin = asyncHandler(async (req, res) => {
+    try {
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 10;
+        const sort = req.query.sort || 'createdAt';
+        const order = req.query.order || 'desc';
+        const search = req.query.search || '';
+
+        const result = await viewAllShopsForAdmin({ page, limit, sort, order, search });
+
+        return res.status(200).json({
+            success: true,
+            message: "Shops retrieved successfully",
+            data: result.shops,
+            pagination: {
+                currentPage: page,
+                totalPages: result.totalPages,
+                totalShops: result.totalShops,
+                hasNextPage: page < result.totalPages,
+                hasPreviousPage: page > 1,
+                limit
+            }
+        });
+    } catch (error) {
+        console.error("Error in fetchAllShopsForAdmin:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Internal server error"
+        });
+    }
+});
+
+const addService = asyncHandler(async (req, res) => {
+    const data = req.body;
+    console.log('duration', data)
+    if (!data) {
+        return res.status(400).json({
+            success: false,
+            message: "No service data provided"
+        });
+    }
+
+    const token = req.headers['authorization']?.split(' ')[1];
+    if (!token) {
+        return res.status(401).json({
+            success: false,
+            message: "No token provided"
+        });
+    }
+
+    try {
+        const decoded = jwt.verify(token, secretkey);
+        data.shoperId = decoded.id;
+
+        const addedService = await addServices(data);
+        if (addedService) {
+            // Update shop active status
+            if (data.shopId) {
+                await updateShopActiveStatus(data.shopId);
+            }
+            
+            return res.status(201).json({
+                success: true,
+                message: "Service added successfully",
+                data: addedService
+            });
+        }
+        return res.status(500).json({
+            success: false,
+            message: "Failed to add service"
+        });
+    } catch (error) {
+        console.error("Error adding service:", error);
+        if (error.name === 'JsonWebTokenError') {
+            return res.status(401).json({
+                success: false,
+                message: "Invalid token"
+            });
+        }
+        return res.status(500).json({
+            success: false,
+            message: "Internal server error"
+        });
+    }
+});
+
+const ViewAllServices = asyncHandler(async (req, res) => {
+    try {
+        const allServices = await viewAllServices();
+        if (!allServices || allServices.length === 0) {
+            return res.status(404).json({
+                success: false,
+                message: "No services found"
+            });
+        }
+        return res.status(200).json({
+            success: true,
+            message: "All services retrieved successfully",
+            data: allServices
+        });
+    } catch (error) {
+        console.error("Error fetching services:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Internal server error"
+        });
+    }
+});
+
+const addBarber = asyncHandler(async (req, res) => {
+    const data = req.body;
+    const { shopId } = data
+    console.log(shopId, "SHOPID -------------------")
+    console.log("addBarber requesting data:", data)
+
+    if (!data) {
+        return res.status(400).json({
+            success: false,
+            message: "No barber data provided"
+        });
+    }
+
+    const token = req.headers['authorization']?.split(' ')[1];
+    if (!token) {
+        return res.status(401).json({
+            success: false,
+            message: "No token provided"
+        });
+    }
+
+    try {
+        const decoded = jwt.verify(token, secretkey);
+        data.shoperId = decoded.id;
+
+
+        const addedBarber = await addBarbers(data);
+        console.log("ADDED BARBER:", addedBarber)
+        const isActive = await updateShopActiveStatus(shopId)
+        console.log("isActive", isActive)
+        if (addedBarber) {
+            return res.status(201).json({
+                success: true,
+                message: "Barber added successfully",
+                data: addedBarber
+            });
+        }
+        return res.status(500).json({
+            success: false,
+            message: "Failed to add barber"
+        });
+    } catch (error) {
+        console.error("Error adding barber:", error);
+        if (error.name === 'JsonWebTokenError') {
+            return res.status(401).json({
+                success: false,
+                message: "Invalid token"
+            });
+        }
+        return res.status(500).json({
+            success: false,
+            message: "Internal server error"
+        });
+    }
+});
+
+const ViewAllBarbers = asyncHandler(async (req, res) => {
+    try {
+        // Get pagination parameters from query string
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 10;
+        const skip = (page - 1) * limit;
+
+        // Get optional search parameters
+        const search = req.query.search || '';
+        const location = req.query.location || '';
+        const specialty = req.query.specialty || '';
+        const sortBy = req.query.sortBy || 'createdAt';
+        const sortOrder = req.query.sortOrder === 'asc' ? 1 : -1;
+
+        // Call the service function with pagination parameters
+        const result = await viewAllBarbers({
+            page,
+            limit,
+            skip,
+            search,
+            location,
+            specialty,
+            sortBy,
+            sortOrder
+        });
+
+        if (!result.barbers || result.barbers.length === 0) {
+            return res.status(404).json({
+                success: false,
+                message: "No barbers found"
+            });
+        }
+
+        return res.status(200).json({
+            success: true,
+            message: "Barbers retrieved successfully",
+            data: {
+                barbers: result.barbers,
+                pagination: {
+                    currentPage: page,
+                    totalPages: result.totalPages,
+                    totalBarbers: result.totalBarbers,
+                    hasNextPage: page < result.totalPages,
+                    hasPreviousPage: page > 1,
+                    limit: limit
+                }
+            }
+        });
+    } catch (error) {
+        console.error("Error fetching barbers:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Internal server error"
+        });
+    }
+});
+
+const viewSigleShop = asyncHandler(async (req, res) => {
+    try {
+        // const shopOwnerId = req.userId;
+        console.log("Request body:", req.body);
+        const shop = await getAShop(req.body.id);
+        console.log("Shop data:--------", shop);
+        if (!shop) {
+            return res.status(404).json({
+                success: false,
+                message: "Shop not found"
+            });
+        }
+        return res.status(200).json({
+            success: true,
+            message: "Shop retrieved successfully",
+            data: shop
+        });
+    } catch (error) {
+        console.error("Error fetching shop:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Internal server error"
+        });
+    }
+});
+
+const viewMyService = asyncHandler(async (req, res) => {
+    const token = req.headers['authorization']?.split(' ')[1];
+    if (!token) {
+        return res.status(401).json({
+            success: false,
+            message: "No token provided"
+        });
+    }
+
+    try {
+        const tokenData = await Decoder(token);
+        const myServices = await getMyService(tokenData.id);
+
+        if (!myServices || myServices.length === 0) {
+            return res.status(404).json({
+                success: false,
+                message: "No services found for this shop"
+            });
+        }
+
+        return res.status(200).json({
+            success: true,
+            message: "Services retrieved successfully",
+            data: myServices
+        });
+    } catch (error) {
+        console.error("Error fetching services:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Internal server error"
+        });
+    }
+});
+
+const viewMyBarbers = asyncHandler(async (req, res) => {
+    const token = req.headers['authorization']?.split(' ')[1];
+    console.log(token, "token")
+    if (!token) {
+        return res.status(401).json({
+            success: false,
+            message: "No token provided"
+        });
+    }
+
+    try {
+        const tokenData = await Decoder(token);
+        const myBarbers = await getMyBarbers(tokenData.id);
+        return res.status(200).json({
+            success: true,
+            message: "Barbers retrieved successfully",
+            data: myBarbers
+        });
+    } catch (error) {
+        console.error("Error fetching barbers:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Internal server error"
+        });
+    }
+});
+
+const viewAllBookingOfShops = asyncHandler(async (req, res) => {
+    try {
+        const token = req.headers['authorization']?.split(' ')[1];
+        const tokenData = await Decoder(token);
+
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 25;
+        const status = req.query.status;
+
+        // Validation for status enum
+        const allowedStatuses = ['pending', 'confirmed', 'completed', 'cancelled', 'upcoming', 'all'];
+        if (status && !allowedStatuses.includes(status)) {
+            return res.status(400).json({
+                success: false,
+                message: `Invalid status. Must be one of: ${allowedStatuses.join(', ')}`
+            });
+        }
+
+        const { bookings, total, stats } = await getAllBookingsOfShop(
+            tokenData.id,
+            page,
+            limit,
+            status
+        );
+
+        return res.status(200).json({
+            success: true,
+            message: "Bookings retrieved successfully",
+            pagination: {
+                total,
+                page,
+                limit,
+                totalPages: Math.ceil(total / limit)
+            },
+            stats,
+            data: bookings
+        });
+
+    } catch (error) {
+        console.error("Error fetching bookings:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Internal server error"
+        });
+    }
+});
+
+
+const myprofile = asyncHandler(async (req, res) => {
+    const token = req.headers['authorization']?.split(' ')[1];
+    if (!token) {
+        return res.status(401).json({
+            success: false,
+            message: "No token provided"
+        });
+    }
+
+    try {
+        const tokenData = await Decoder(token);
+        const shopData = await getShopUser(tokenData.id);
+
+        if (!shopData) {
+            return res.status(404).json({
+                success: false,
+                message: "Shop profile not found"
+            });
+        }
+
+        return res.status(200).json({
+            success: true,
+            message: "Profile retrieved successfully",
+            data: shopData
+        });
+    } catch (error) {
+        console.error("Error fetching profile:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Internal server error"
+        });
+    }
+});
+const viewMyshop = asyncHandler(async (req, res) => {
+    const token = req.headers['authorization']?.split(' ')[1];
+    if (!token) {
+        return res.status(401).json({
+            success: false,
+            message: "No token provided"
+        });
+    }
+
+    try {
+        const tokenData = await Decoder(token);
+        const myShop = await getMyshop(tokenData.id);
+        console.log("My shop data:--------", myShop);
+        if (!myShop) {
+            return res.status(404).json({
+                success: false,
+                message: "My shop not found"
+            });
+        }
+
+        return res.status(200).json({
+            success: true,
+            message: "My shop retrieved successfully",
+            data: myShop
+        });
+    } catch (error) {
+        console.error("Error fetching my shop:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Internal server error"
+        });
+    }
+})
+const viewSingleShopService = asyncHandler(async (req, res) => {
+    const shopId = req.params.id;
+    if (!shopId) {
+        return res.status(400).json({
+            success: false,
+            message: "Shop ID is required"
+        });
+    }
+
+    try {
+        const services = await getShopService(shopId);
+        // if (!services || services.length === 0) {
+        //     return res.status(404).json({
+        //         success: false,
+        //         message: "No services found for this shop"
+        //     });
+        // }
+
+        return res.status(200).json({
+            success: true,
+            message: "Services retrieved successfully",
+            data: services
+        });
+    } catch (error) {
+        console.error("Error fetching services:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Internal server error"
+        });
+    }
+})
+const viewSingleShopBarbers = asyncHandler(async (req, res) => {
+    const shopId = req.params.id;
+    if (!shopId) {
+        return res.status(400).json({
+            success: false,
+            message: "Shop ID is required"
+        });
+    }
+
+    try {
+        const barbers = await getShopBarbers(shopId);
+        // if (!barbers || barbers.length === 0) {
+        //     return res.status(404).json({
+        //         success: false,
+        //         message: "No barbers found for this shop"
+        //     });
+        // }
+
+        return res.status(200).json({
+            success: true,
+            message: "Barbers retrieved successfully",
+            data: barbers
+        });
+    } catch (error) {
+        console.error("Error fetching barbers:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Internal server error"
+        });
+    }
+});
+
+const updateBarber = async (req, res) => {
+    try {
+        const barberId = req.params.id
+        let data = req.body
+        const barber = await editBarberProfile(barberId, data)
+        if (barber && barber.shopId) {
+            await updateShopActiveStatus(barber.shopId);
+        }
+        console.log("edited document:", barber)
+        if (!barber || barber.lenght === 0) {
+            return res.status(404).json({
+                success: false,
+                message: "barber not found"
+            });
+        }
+
+        return res.status(200).json({
+            success: true,
+            message: "successfully updated barber",
+            data: barber
+        });
+    } catch (error) {
+        console.error(error)
+        return res.status(500).json({
+            success: false,
+            message: "internal server error"
+        })
+    }
+}
+
+const deleteBarber = async (req, res) => {
+    try {
+        const barberId = req.params.id
+        const shopId = req.params.shopId
+        const barber = await deleteBarberFunction(barberId)
+        const isActive = await updateShopActiveStatus(shopId)
+        console.log("isActive", isActive)
+
+        if (!barber) {
+            // nothing was deleted because document not found
+            return res.status(404).json({
+                success: false,
+                message: 'Barber not found'
+            })
+        }
+
+        // deletion successful — return the deleted document or a success message
+        return res.status(200).json({
+            success: true,
+            message: 'Barber successfully deleted',
+            data: barber
+        })
+    } catch (error) {
+        console.error(error)
+        return res.status(500).json({
+            success: false,
+            message: 'Internal server error'
+        })
+    }
+}
+
+
+const createPremiumOrder = async (req, res) => {
+    try {
+        const { shopId } = req.body;
+        if (!shopId) {
+            return res.status(400).json({ success: false, message: "Shop ID is required" });
+        }
+
+        const premiumPriceInPaise = 10 * 100; // Rs 500
+
+        const order = await razorpay.orders.create({
+            amount: premiumPriceInPaise,
+            currency: 'INR',
+            receipt: `premium_${shopId}`
+        });
+
+        return res.status(200).json({ success: true, order });
+    } catch (error) {
+        console.error("Premium Order Error:", error);
+        return res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+const verifyPremiumAndUpgrade = async (req, res) => {
+    try {
+        const { shopId, razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body;
+
+        if (!shopId || !razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
+            return res.status(400).json({ success: false, message: "Missing required payment fields!" });
+        }
+
+        // Verify the payment
+        const expectedSignature = crypto
+            .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET)
+            .update(`${razorpay_order_id}|${razorpay_payment_id}`)
+            .digest('hex');
+
+        if (expectedSignature !== razorpay_signature) {
+            return res.status(400).json({ success: false, message: "Invalid Payment Signature!" });
+        }
+
+        // Call the repo function to actually upgrade the DB
+        const premium = await makePremiumFunction(shopId);
+
+        if (!premium) {
+            return res.status(404).json({ success: false, message: "Premium subscription failed to update DB" });
+        }
+
+        return res.status(200).json({
+            success: true,
+            message: "Shop upgraded to Premium successfully!",
+            premium
+        });
+
+    } catch (error) {
+        console.error("Premium Verify Error:", error);
+        return res.status(500).json({ success: false, message: "Internal Server Error" });
+    }
+};
+
+const verifyShop = async (req, res) => {
+    try {
+        const { shopId } = req.body;
+        const status = req.body.status !== undefined ? req.body.status : true;
+        if (!shopId) {
+            return res.status(400).json({ success: false, message: "Shop ID is required" });
+        }
+
+        const updatedShop = await verifyShopFunction(shopId, status);
+        if (!updatedShop) {
+            return res.status(404).json({ success: false, message: "Shop not found" });
+        }
+
+        return res.status(200).json({
+            success: true,
+            message: `Shop ${status ? 'verified' : 'unverified'} successfully`,
+            data: updatedShop
+        });
+    } catch (error) {
+        console.error("Error in verifyShop controller:", error);
+        return res.status(500).json({ success: false, message: "Internal Server Error" });
+    }
+};
+
+const getAllPremiumShops = async (req, res) => {
+    try {
+        let premiumShops = await getAllPremiumShopsFunction()
+        if (!premiumShops) {
+            return res.status(404).json({
+                success: false,
+                message: "get all premium shops is faied"
+            })
+        } else {
+            return res.status(200).json({
+                success: true,
+                message: "successfully get all premium shops",
+                premiumShops
+            })
+        }
+    } catch (error) {
+        console.error(error)
+        return res.status(500).json({
+            success: false,
+            message: "internal server error"
+        })
+    }
+}
+
+const saveBankDetails = async (req, res) => {
+    try {
+        // 1. Get token
+        const token = req.headers['authorization']?.split(' ')[1];
+
+        if (!token) {
+            return res.status(401).json({
+                success: false,
+                message: "Token required"
+            });
+        }
+
+        // 2. Decode token
+        const tokenData = await Decoder(token);
+        console.log("token data in controller =====", tokenData);
+
+        const shoperId = tokenData.id;
+        console.log("shoperId------------", shoperId);
+
+        // 3. Create data object (do NOT mutate req.body)
+        const data = {
+            ...req.body,
+            ShoperId: shoperId   // 🔴 match schema field name
+        };
+
+        // 4. Save bank details
+        const bankDetails = await saveBankDetailsFunction(data);
+
+        if (!bankDetails) {
+            return res.status(400).json({
+                success: false,
+                message: "Failed to save bank details"
+            });
+        }
+
+        // 5. Success response
+        return res.status(200).json({
+            success: true,
+            message: "Successfully saved bank details",
+            bankDetails
+        });
+
+    } catch (error) {
+        console.error("saveBankDetails error:", error);
+
+        return res.status(500).json({
+            success: false,
+            message: "Internal server error"
+        });
+    }
+};
+
+
+const viewbankDetails = async (req, res) => {
+    try {
+        const token = req.headers['authorization']?.split(' ')[1];
+        if (!token) {
+            res.status(404).json({
+                success: false,
+                message: "token required"
+            })
+        }
+        const tokenData = await Decoder(token);
+        console.log(tokenData)
+        const shoperId = tokenData.id
+        const bankDetails = await viewbankDetailsFunction(shoperId)
+        console.log("Bank details", bankDetails)
+        if (!bankDetails) {
+            return res.status(404).json({
+                success: true,
+                message: "fetching bank details is failed",
+            })
+        } else {
+            return res.status(200).json({
+                success: true,
+                message: "successfully fetched bank details",
+                bankDetails
+            })
+        }
+    } catch (error) {
+        console.error(error)
+        return res.status(500).json({
+            success: false,
+            message: "internal server error"
+        })
+    }
+}
+
+const deleteBankDetails = async (req, res) => {
+    try {
+        const shoperId = req.params.id
+        const bankDetails = await deleteBankdetailsFunction(shoperId)
+        if (!bankDetails || bankdetails.lenght === 0) {
+            return res.status(200).json({
+                success: true,
+                message: "successfully deleted the bank details"
+            })
+        } else {
+            return res.status(404).json({
+                success: false,
+                message: "deletion failed"
+            })
+        }
+    }
+    catch (error) {
+        console.error(error)
+        return res.status(500).json({
+            success: false,
+            message: "internal server error"
+        })
+    }
+}
+
+const upadateBankdetails = async (req, res) => {
+    try {
+        const shoperId = req.params.id
+        const data = req.body
+        const bankDetails = await updateBankDetailsFunction(shoperId, data)
+        if (bankDetails) {
+            return res.status(200).json({
+                success: true,
+                message: "successfully updated bank details",
+                bankDetails
+            })
+        } else {
+            return res.status(404).json({
+                success: false,
+                message: "failed to update the bank details"
+            })
+        }
+    } catch (error) {
+        console.error(erro)
+        return res.status(500).json({
+            success: failed,
+            message: "interal server error"
+        })
+    }
+}
+
+const editService = async (req, res) => {
+    try {
+        const serviceId = req.params.id
+        console.log("serviceId", serviceId)
+        const data = req.body
+        let service = await editServiceFunction(serviceId, data)
+        if (!service || service.length === 0) {
+            res.status(404).json({
+                success: false,
+                message: "failed to updata service",
+            })
+        } else {
+            res.status(200).json({
+                success: true,
+                message: "successfully edited service",
+                service
+            })
+        }
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: "internal server error"
+        })
+        console.error(error)
+    }
+}
+
+const deleteService = async (req, res) => {
+    try {
+        const serviceId = req.params.id
+        
+        // Get service first to find shopId
+        const serviceData = await ServiceModel.findById(serviceId);
+        const shopId = serviceData?.shopId;
+
+        let service = await deleteServiceFunction(serviceId)
+        
+        if (shopId) {
+            await updateShopActiveStatus(shopId);
+        }
+
+        if (!service) {
+            return res.status(404).json({
+                success: false,
+                message: "failed deleted service",
+            })
+        }
+        res.status(200).json({
+            success: true,
+            message: "successfully deleted service",
+            service
+        })
+    } catch (error) {
+        console.log(error)
+    }
+}
+
+const findNearByShops = async (req, res) => {
+    try {
+        const { lng, lat, page = 1, limit = 10 } = req.query;
+
+        // Validate coordinates
+        if (!lng || !lat) {
+            return res.status(400).json({
+                success: false,
+                message: "lng and lat are required"
+            });
+        }
+
+        console.log("COORDINATES:", lng, lat);
+
+        const pageNum = parseInt(page);
+        const limitNum = parseInt(limit);
+
+        if (isNaN(pageNum) || isNaN(limitNum) || pageNum < 1 || limitNum < 1) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid page or limit"
+            });
+        }
+
+        const shops = await findNearestShops(lng, lat, {
+            page: pageNum,
+            limit: limitNum
+        });
+
+        if (shops.length > 0) {
+            return res.status(200).json({
+                success: true,
+                message: "Successfully fetched nearby shops",
+                shops,
+                // Optional: add metadata
+                pagination: {
+                    page: pageNum,
+                    limit: limitNum,
+                    returned: shops.length
+                }
+            });
+        }
+
+        return res.status(404).json({
+            success: false,
+            message: "No nearby shops found"
+        });
+    } catch (error) {
+        console.error("Error in findNearByShops:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Internal server error"
+        });
+    }
+};
+
+const deleteShop = async (req, res) => {
+    try {
+        const shopId = req.params.id
+        const shop = await deleteShopFuntion(shopId)
+        if (shop) {
+            return res.status(200).json({
+                success: true,
+                message: "successfully deleted the shop",
+
+            })
+        }
+        return res.status(404).json({
+            success: false,
+            message: "failed to delete shop",
+
+        })
+    } catch (error) {
+        console.error(error)
+        return res.status(500).json({
+            success: false,
+            message: "internal server erroo"
+        })
+    }
+}
+
+const addProfileImage = async (req, res) => {
+    try {
+        const shopId = req.params.id
+        const media = req.file
+        if (!shopId) {
+            res.status(404).json({ error: "shopId is required" })
+        }
+        if (!media) {
+            res.status(404).json({ error: "no image uploaded" })
+        }
+        const result = await SaveProfileToCloud(media, shopId)
+        res.status(200).json({
+            success: true,
+            result
+        })
+
+    } catch (error) {
+        res.status(500).json({
+            error: "internal server error"
+        })
+        console.log(error)
+    }
+}
+
+const deleteMedia = async (req, res) => {
+    try {
+        const id = req.params.id
+        const result = await deleteMediaFile(id)
+        if (result) {
+            return res.status(200).json({
+                success: true,
+                message: "successfully deleted the file"
+            })
+        }
+        return res.status(404).json({
+            success: false,
+            message: "failed to delete the file"
+        })
+    } catch (error) {
+        console.log("Error in deleting file", error)
+        return res.status(500).json({
+            success: false,
+            message: "internal server error"
+        })
+    }
+}
+
+const updateMediaDetails = async (req, res) => {
+    try {
+        const { mediaId } = req.params;
+        const { title, description } = req.body;
+
+        if (!title || !description) {
+            return res.status(400).json({
+                success: false,
+                message: "Both title and description are required",
+            });
+        }
+
+        const result = await updateMediaDetailsFunction(mediaId, title, description);
+
+        if (!result || result.matchedCount === 0) {
+            return res.status(404).json({
+                success: false,
+                message: "Media not found",
+            });
+        }
+
+        return res.status(200).json({
+            success: true,
+            message: "Media updated successfully",
+            result,
+        });
+    } catch (error) {
+        console.error("Error updating media:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Server error",
+            error: error.message,
+        });
+    }
+};
+
+
+async function geocodeTextToCoords(text) {
+    const res = await fetch(
+        `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(text)}&format=json&limit=1`
+    );
+
+    const data = await res.json();
+    if (!data.length) return null;
+
+    return {
+        lat: parseFloat(data[0].lat),
+        lng: parseFloat(data[0].lon),
+        place: data[0].display_name
+    };
+}
+
+const search = async (req, res) => {
+    try {
+        const q = (req.query.q || "").trim();
+        if (!q) {
+            return res.status(400).json({ message: "Search text required" });
+        }
+
+        // 1. Try finding by name first
+        let shops = await ShopModel.find({
+            ShopName: { $regex: q, $options: "i" }
+        });
+
+        // 2. If no shops found by name, try Geocoding
+        if (shops.length === 0) {
+            console.log("entered in location search")
+            const coords = await geocodeTextToCoords(q);
+            console.log("COORDS", coords)
+
+            if (coords) {
+                const { lat, lng } = coords;
+                // Overwrite the 'shops' variable with the nearby results
+                shops = await ShopModel.find({
+                    ExactLocationCoord: {
+                        $near: {
+                            $geometry: {
+                                type: "Point",
+                                coordinates: [lng, lat]
+                            },
+                            $maxDistance: 10000
+                        }
+                    }
+                });
+            }
+        }
+
+        // 3. Final Response (Unified variable name)
+        if (shops.length > 0) {
+            return res.status(200).json({
+                success: true,
+                message: "successfully fetch shops",
+                shops // This will now contain either Name matches OR Nearby matches
+            });
+        } else {
+            return res.status(404).json({
+                success: false, // Changed to false for better logic
+                message: "failed to fetch shops",
+                shops: [] // Return empty array to prevent frontend map errors
+            });
+        }
+
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({
+            success: false,
+            message: "internal server error"
+        });
+    }
+}
+
+const fetchAllUniqueService = async (req, res) => {
+    try {
+        const service = await getUniqueService()
+        if (service) {
+            res.status(200).json({
+                success: true,
+                message: "successfull fetch service",
+                service
+            })
+        } else {
+            res.status(404).json({
+                success: true,
+                message: "failed to fetch service"
+            })
+        }
+    } catch (error) {
+        console.log(error)
+    }
+}
+
+const filterShopsByService = async (req, res) => {
+    try {
+        console.log(req.body)
+        const { shopIds, serviceName } = req.body;
+
+        if (!shopIds?.length || !serviceName) {
+            return res.status(400).json({
+                success: false,
+                message: "shopIds and serviceName are required"
+            });
+        }
+
+        const shops = await filterShopsByServiceFunction(shopIds, serviceName);
+
+        return res.status(200).json({
+            success: true,
+            count: shops.length,
+            shops
+        });
+
+    } catch (error) {
+        console.error("filterShopsByService error:", error);
+        res.status(500).json({
+            success: false,
+            message: "Server error"
+        });
+    }
+};
+
+const viewAllService = async (req, res) => {
+    try {
+        const service = await ServiceModel.find({})
+        res.json(service)
+    } catch (error) {
+        console.log(error)
+    }
+}
+
+const editShop = async (req, res) => {
+    try {
+        const shopId = req.params.id
+        const data = req.body
+        const shop = await modifyShop(shopId, data)
+        if (shop) {
+            res.status(200).json({
+                success: true,
+                message: "successfully updated the shop",
+                shop
+            })
+        } else {
+            res.status(404).json({
+                success: false,
+                message: "failed to updated shop"
+            })
+        }
+    } catch (error) {
+        console.log(error)
+        res.status(500).json({
+            success: false,
+            message: "internal server error"
+        })
+    }
+}
+
+const getShop = async (req, res) => {
+    try {
+        const shopId = req.params.id
+
+        const shop = await fetchShop(shopId)
+
+        if (shop) {
+            res.status(200).json({
+                success: true,
+                message: "successfully fetch the shop",
+                shop
+            })
+        } else {
+            res.status(404).json({
+                success: false,
+                message: "failed to fetch shop"
+            })
+        }
+    } catch (error) {
+        console.log(error)
+        res.status(500).json({
+            success: false,
+            message: "internal server error"
+        })
+    }
+}
+
+const fetchBookingsByShop = async (req, res) => {
+    try {
+        const page = Number(req.query.page) || 1;
+        const limit = Number(req.query.limit) || 10;
+        const skip = (page - 1) * limit;
+
+        const { shopId } = req.params;
+
+        if (!shopId) {
+            return res.status(400).json({
+                success: false,
+                message: "shopId parameter is required in the URL",
+            });
+        }
+
+        console.log(`[fetchBookingsByShop] shopId received: ${shopId} (type: ${typeof shopId})`);
+
+        const {
+            date,
+            startDate,
+            endDate,
+            period,
+            bookingStatus,
+            paymentStatus,
+        } = req.query;
+
+        // ────────────────────────────────────────────────
+        // Decide which field name to use for the shop reference
+        // Try these common names in order — change priority according to YOUR schema
+        // ────────────────────────────────────────────────
+        const possibleShopFields = ['shopId', 'shop', 'store', 'storeId', 'vendor', 'vendorId'];
+
+        let shopFieldName = null;
+        let shopValue = shopId;
+
+        // If it's likely an ObjectId → convert it
+        if (mongoose.Types.ObjectId.isValid(shopId)) {
+            shopValue = new mongoose.Types.ObjectId(shopId);
+            console.log(`[fetchBookingsByShop] shopId is valid ObjectId → converting`);
+        }
+
+        // You can hard-code the correct field name here once you know it
+        // For now — we try to be flexible during debugging
+        shopFieldName = 'shopId';           // ←←← MOST COMMON — change this to match your schema
+        // shopFieldName = 'shop';          // use this if it's a reference field
+        // shopFieldName = 'storeId';
+
+        let filter = {
+            [shopFieldName]: shopValue,
+        };
+
+        // Status filters
+        if (bookingStatus) filter.bookingStatus = bookingStatus;
+        if (paymentStatus) filter.paymentStatus = paymentStatus;
+
+        // ────────────────────────────────────────────────
+        //        Date / Period filtering
+        // ────────────────────────────────────────────────
+        if (date || (startDate && endDate) || period) {
+            let startOfRange, endOfRange;
+
+            const now = new Date();
+
+            if (date) {
+                startOfRange = new Date(date);
+                startOfRange.setHours(0, 0, 0, 0);
+
+                endOfRange = new Date(date);
+                endOfRange.setHours(23, 59, 59, 999);
+            }
+            else if (startDate && endDate) {
+                startOfRange = new Date(startDate);
+                startOfRange.setHours(0, 0, 0, 0);
+
+                endOfRange = new Date(endDate);
+                endOfRange.setHours(23, 59, 59, 999);
+            }
+            else if (period) {
+                if (period === 'today') {
+                    startOfRange = new Date(now);
+                    startOfRange.setHours(0, 0, 0, 0);
+                    endOfRange = new Date(now);
+                    endOfRange.setHours(23, 59, 59, 999);
+                }
+                else if (period === 'lastWeek') {
+                    startOfRange = new Date(now);
+                    startOfRange.setDate(now.getDate() - 7);
+                    startOfRange.setHours(0, 0, 0, 0);
+                    endOfRange = new Date(now);
+                    endOfRange.setHours(23, 59, 59, 999);
+                }
+                else if (period === 'lastMonth') {
+                    startOfRange = new Date(now);
+                    startOfRange.setMonth(now.getMonth() - 1);
+                    startOfRange.setHours(0, 0, 0, 0);
+                    endOfRange = new Date(now);
+                    endOfRange.setHours(23, 59, 59, 999);
+                }
+            }
+
+            if (startOfRange && endOfRange) {
+                filter.bookingDate = { $gte: startOfRange, $lte: endOfRange };
+            }
+        }
+
+        // ────────────────────────────────────────────────
+        //               DEBUGGING LOGS
+        // ────────────────────────────────────────────────
+        console.log('[fetchBookingsByShop] Final filter:');
+        console.log(JSON.stringify(filter, null, 2));
+
+        // Quick existence check — very useful during debugging
+        const quickCheck = await BookingModel.findOne({ [shopFieldName]: shopValue });
+        console.log(`[fetchBookingsByShop] Found at least one booking for this shop? → ${!!quickCheck}`);
+
+        if (quickCheck) {
+            console.log('[fetchBookingsByShop] Sample booking _id:', quickCheck._id);
+            console.log('[fetchBookingsByShop] Sample booking date:', quickCheck.bookingDate);
+        }
+
+        // ────────────────────────────────────────────────
+        //               MAIN QUERIES
+        // ────────────────────────────────────────────────
+        const total = await BookingModel.countDocuments(filter);
+
+        const bookings = await BookingModel.find(filter)
+            .skip(skip)
+            .limit(limit)
+            .sort({ bookingDate: -1 })
+            // .populate('customer', 'name phone')     // uncomment if needed
+            // .populate('service', 'name price')
+            .lean();   // faster if you don't need mongoose documents
+
+        console.log(`[fetchBookingsByShop] Found ${bookings.length} bookings on this page`);
+
+        return res.status(200).json({
+            success: true,
+            message: "Bookings fetched successfully",
+            shopId,
+            shopFieldUsed: shopFieldName,
+            total,
+            page,
+            totalPages: Math.ceil(total / limit),
+            countThisPage: bookings.length,
+            bookings,
+        });
+
+    } catch (error) {
+        console.error('[fetchBookingsByShop] Error:', error);
+        return res.status(500).json({
+            success: false,
+            message: "Server error while fetching bookings",
+            error: error.message,
+        });
+    }
+};
+
+const fetchServicebyShop = async (req, res) => {
+    try {
+        const shopId = req.params.shopId
+        console.log("shopId in controller", shopId)
+        const service = await fetchServiceByShopId(shopId)
+        if (service) {
+            res.status(200).json({
+                success: true,
+                message: "successfull fetched service",
+                service
+            })
+        } else {
+            res.status(404).json({
+                success: false,
+                message: "failed to fetch service"
+            })
+        }
+    } catch (error) {
+        console.error("error in fetching serive", error)
+        res.status(500).json({
+            success: false,
+            message: "internal server error"
+        })
+    }
+}
+
+const fetchBarbersbyShop = async (req, res) => {
+    try {
+        const shopId = req.params.shopId
+        const service = await fetchBarbersByShopId(shopId)
+        if (service) {
+            res.status(200).json({
+                success: true,
+                message: "successfull fetched barbers",
+                service
+            })
+        } else {
+            res.status(404).json({
+                success: false,
+                message: "failed to fetch barbers"
+            })
+        }
+    } catch (error) {
+        console.error("error in fetching serive", error)
+        res.status(500).json({
+            success: false,
+            message: "internal server error"
+        })
+    }
+}
+
+const viewService = async (req, res) => {
+    try {
+        const service = await ServiceModel.find({})
+        res.status(200).json({
+            success: true,
+            message: "successfully fetched all service",
+            service
+        })
+    } catch (error) {
+        console.log(error)
+    }
+}
+
+const delService = async (req, res) => {
+    try {
+        const serviceId = req.params.serviceId
+        console.log("service Id:", serviceId)
+        // Get the service first to find the shopId
+        const serviceData = await ServiceModel.findById(serviceId);
+        const shopId = serviceData?.shopId;
+
+        const service = await deleteServiceFunction(serviceId)
+        
+        if (shopId) {
+            await updateShopActiveStatus(shopId);
+        }
+
+        if (service) {
+            res.status(200).json({
+                success: true,
+                message: "successfully delete  service",
+                service
+            })
+        }
+    } catch (error) {
+        console.log(error)
+    }
+}
+
+const createAsBarber = async (req, res) => {
+    try {
+        const shopId = req.params.shopId
+        const token = req.headers['authorization']?.split(' ')[1];
+        if (!token) {
+            return res.status(401).json({
+                success: false,
+                message: "No token provided"
+            });
+        }
+        const tokenData = await Decoder(token);
+        console.log("TOKEN DATA:", tokenData)
+        const shopOwnerId = tokenData.id
+        const shopOwner = await LocationAndNameOfOwner(shopOwnerId, shopId);
+        console.log(shopOwner, "SHOP OWNER");
+        const transformToBarberPayload = (shopOwner, shopOwnerId) => {
+            return {
+                BarberName: `${shopOwner.ShopOwnerId.firstName}${shopOwner.ShopOwnerId.lastName}`,
+                From: shopOwner.ExactLocation,
+                shopId: shopOwner._id,
+                shoperId: shopOwnerId
+            };
+        };
+        const barberPayload = transformToBarberPayload(shopOwner, shopOwnerId);
+
+
+        const shopOwnerToBarber = await addBarbers(barberPayload)
+        const isActive = await updateShopActiveStatus(shopId)
+        if (shopOwnerToBarber) {
+            res.status(200).json({
+                success: true,
+                message: "successfully convert owner to barber",
+                shopOwnerToBarber,
+                isActive: isActive
+            })
+        } else {
+            res.status(404).json({
+                success: false,
+                message: "failed to convert owner as barber"
+            })
+        }
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: "internal server error"
+        })
+        console.error(error)
+    }
+}
+
+
+
+const migrateShopAudience = asyncHandler(async (req, res) => {
+    try {
+        const shops = await ShopModel.find({
+            $or: [
+                { targetAudience: { $exists: false } },
+                { targetAudience: { $size: 0 } }
+            ]
+        });
+
+        console.log(`Found ${shops.length} shops needing migration.`);
+
+        const audiences = ['men', 'women', 'kids'];
+        let updatedCount = 0;
+
+        for (const shop of shops) {
+            // Pick a random audience
+            const randomAudience = [audiences[Math.floor(Math.random() * audiences.length)]];
+
+            // Use updateOne to bypass validation of other fields (like incomplete media)
+            await ShopModel.updateOne(
+                { _id: shop._id },
+                { $set: { targetAudience: randomAudience } }
+            );
+            updatedCount++;
+        }
+
+        return res.status(200).json({
+            success: true,
+            message: `Migration completed. Updated ${updatedCount} shops with random targetAudience.`,
+            updatedCount
+        });
+    } catch (error) {
+        console.error("Migration Error:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Migration failed",
+            error: error.message
+        });
+    }
+});
+
+
+
+module.exports = {
+    migrateShopAudience,
+    createAsBarber,
+    delService,
+    viewService,
+    fetchServicebyShop,
+    fetchBarbersbyShop,
+    fetchBookingsByShop,
+    getShop,
+    editShop,
+    fetchAllShopsForAdmin,
+    viewAllService,
+    filterShopsByService,
+    fetchAllUniqueService,
+    search,
+    updateMediaDetails,
+    deleteMedia,
+    addProfileImage,
+    deleteShop,
+    findNearByShops,
+    deleteService,
+    editService,
+    upadateBankdetails,
+    deleteBankDetails,
+    viewbankDetails,
+    saveBankDetails,
+    getAllPremiumShops,
+    verifyShop,
+    createPremiumOrder,
+    verifyPremiumAndUpgrade,
+    deleteBarber,
+    myprofile,
+    AddShop,
+    ViewAllShop,
+    addService,
+    ViewAllServices,
+    addBarber,
+    ViewAllBarbers,
+    viewSigleShop,
+    viewMyService,
+    viewMyBarbers,
+    viewAllBookingOfShops,
+    viewMyshop,
+    viewSingleShopService,
+    viewSingleShopBarbers,
+    updateBarber
+};
