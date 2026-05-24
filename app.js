@@ -22,6 +22,7 @@ app.use((req, res, next) => {
 });
 
 const authRouter = require('./Auth/Routes/userRoute');
+const adminRouter = require('./Shops/Router/AdminRoutes')
 const shopRouter = require('./Shops/Router/ShopRouter');
 const SlotRouter = require('./SlotManagement/SlotRouter/SlotRouter')
 const BookingRouter = require('./Booking/Router/BookingRouter')
@@ -57,6 +58,7 @@ app.use('/api/shops', shopRouter)
 app.use('/api/slot', SlotRouter)
 app.use('/api/booking', BookingRouter)
 app.use('/api/offers', OfferRouter)
+app.use('/api/admin',adminRouter)
 
 // Fixed cron job - runs every 10 minutes
 const scheduledJob = cron.schedule('0 0 */1 * *', async () => {
