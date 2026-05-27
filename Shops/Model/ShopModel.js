@@ -84,6 +84,10 @@ const ShopSchema = new mongoose.Schema(
       type: [String],
       enum: ['men', 'women', 'kids'],
       validate: [v => v.length > 0, 'Shop must belong to at least one category']
+    },
+    blockedDates: {
+      type: [String],
+      default: []
     }
   },
   { timestamps: true }

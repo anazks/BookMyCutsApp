@@ -17,12 +17,14 @@ const City = require('../../Auth/Model/City')
 
 // --- SHOP OWNER PROTECTED APIs ---
 const shopAuth = [verifyToken, authorizeRoles('shop')];
+const adminAuth = [verifyToken, authorizeRoles('admin')];
+
 
 router.route('/addShop').post(shopAuth, AddShop)
 router.route('/getMyProfile').get(shopAuth, myprofile)
 router.route('/viewMyshop').get(shopAuth, viewMyshop)
 router.route('/viewMyBooking').get(shopAuth, viewAllBookingOfShops)
-router.route('/shop/:id').put(shopAuth, editShop)
+router.route('/shop/:id').put(verifyToken, authorizeRoles('shop', 'admin'), editShop)
 
 // --- PUBLIC / COMMON APIs (RESTful) ---
 router.route('/shops').get(ViewAllShop)                    // Paginated, filterable, includes unique cities

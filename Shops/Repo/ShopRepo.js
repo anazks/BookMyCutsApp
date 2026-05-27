@@ -177,7 +177,7 @@ module.exports.viewAllShopsForAdmin = async (params = {}) => {
 
 module.exports.getUniqueCitiesFromShops = async () => {
     try {
-        const cities = await ShopModel.distinct('City');
+        const cities = await ShopModel.distinct('City', { isVerified: true, isActive: true });
         // Filter out empty/null values and sort alphabetically
         return cities
             .filter(c => c && c.trim() !== '')

@@ -230,6 +230,11 @@ module.exports.bookNow = async (data, decodedValue) => {
   if (!shopData) {
     throw new Error("Shop not found in database");
   }
+
+  // Validate if date is blocked/closed urgently
+  if (shopData.blockedDates && shopData.blockedDates.includes(dateStr)) {
+    throw new Error("The shop is closed on this date due to an urgent situation.");
+  }
   const shopOwnerId = shopData.ShopOwnerId; 
   console.log("✅ shop Data",shopData)
   console.log("✅ Shop ID:", shopId);
@@ -372,6 +377,23 @@ module.exports.getBarberFullSchedule = async (barberId, bookingDate, shopId) => 
       return { success: false, message: "Invalid barberId or shopId" };
     }
 
+    const shop = await ShopModel.findById(shopId).lean();
+    if (!shop) return { success: false, message: "Shop not found" };
+    if (shop.blockedDates && shop.blockedDates.includes(bookingDate)) {
+      return {
+        success: true,
+        schedule: {
+          date: bookingDate,
+          workHours: { from: "closed", to: "closed" },
+          breaks: [],
+          bookings: [],
+          freeSlots: [],
+          isBlocked: true,
+          message: "Shop is closed on this date due to an urgent situation."
+        }
+      };
+    }
+
     // === FIX 1: Correctly define the full day in IST using explicit +05:30 offset ===
     const startOfDayIST = new Date(`${bookingDate}T00:00:00+05:30`);     // 00:00:00 IST
     const endOfDayIST   = new Date(`${bookingDate}T23:59:59.999+05:30`); // 23:59:59.999 IST
@@ -474,6 +496,23 @@ module.exports.getShopAvailableSlots = async (shopId, bookingDate) => {
   try {
     if (!mongoose.Types.ObjectId.isValid(shopId)) {
       return { success: false, message: "Invalid shopId" };
+    }
+
+    const shop = await ShopModel.findById(shopId).lean();
+    if (!shop) return { success: false, message: "Shop not found" };
+    if (shop.blockedDates && shop.blockedDates.includes(bookingDate)) {
+      return {
+        success: true,
+        schedule: {
+          date: bookingDate,
+          workHours: { from: "closed", to: "closed" },
+          breaks: [],
+          bookings: [],
+          freeSlots: [],
+          isBlocked: true,
+          message: "Shop is closed on this date due to an urgent situation."
+        }
+      };
     }
 
     // Input date is YYYY-MM-DD (e.g., "2026-01-01")

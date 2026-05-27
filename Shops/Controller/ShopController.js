@@ -1391,12 +1391,45 @@ const editShop = async (req, res) => {
     try {
         const shopId = req.params.id
         const data = req.body
+
+        // Fetch existing shop to compare blockedDates
+        const existingShop = await ShopModel.findById(shopId)
+        let cancelledCount = 0
+
+        if (existingShop && data.blockedDates && Array.isArray(data.blockedDates)) {
+            const oldBlockedDates = existingShop.blockedDates || []
+            const newBlockedDates = data.blockedDates.filter(d => !oldBlockedDates.includes(d))
+
+            if (newBlockedDates.length > 0) {
+                // Cancel active bookings on newly blocked dates
+                for (const dateStr of newBlockedDates) {
+                    const startOfDayIST = new Date(`${dateStr}T00:00:00+05:30`)
+                    const endOfDayIST   = new Date(`${dateStr}T23:59:59.999+05:30`)
+
+                    const result = await BookingModel.updateMany(
+                        {
+                            shopId: new mongoose.Types.ObjectId(shopId),
+                            bookingDate: { $gte: startOfDayIST, $lte: endOfDayIST },
+                            bookingStatus: { $in: ['pending', 'confirmed'] }
+                        },
+                        { $set: { bookingStatus: 'cancelled' } }
+                    )
+                    cancelledCount += result.modifiedCount || 0
+                }
+            }
+        }
+
         const shop = await modifyShop(shopId, data)
         if (shop) {
+            let message = "successfully updated the shop"
+            if (cancelledCount > 0) {
+                message += `. ${cancelledCount} active booking(s) on newly blocked dates were automatically cancelled.`
+            }
             res.status(200).json({
                 success: true,
-                message: "successfully updated the shop",
-                shop
+                message,
+                shop,
+                cancelledBookingsCount: cancelledCount
             })
         } else {
             res.status(404).json({

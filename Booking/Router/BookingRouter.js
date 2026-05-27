@@ -8,6 +8,7 @@ const UserModel = require('../../Auth/Model/UserModel');
 // --- AUTH DEFS ---
 const userAuth = [verifyToken, authorizeRoles('user')];
 const shopAuth = [verifyToken, authorizeRoles('shop')];
+const adminAuth = [verifyToken, authorizeRoles('admin')];
 
 // --- EXTERNAL WEBHOOKS ---
 // Razorpay sends server-to-server callbacks here, so it CANNOT have authentication
@@ -25,8 +26,8 @@ router.route('/verifyPayment').post(userAuth, verifyPayment);
 router.route('/getBarberFreeTime').post(userAuth, barberFreeSlots);
 router.route('/fetchAllAvailableTimeSlots').post(userAuth, fetchAllAvailableTimeSlots);
 router.route('/fetchUpComingBooking/:id').get(userAuth, fetchUpComeingBooking);
-router.route('/bookings').get(userAuth, fetchAllbookings);
-router.route('/bookings/:id').get(userAuth, getbookings);
+router.route('/bookings').get(verifyToken, authorizeRoles('user', 'admin'), fetchAllbookings);
+router.route('/bookings/:id').get(verifyToken, authorizeRoles('user', 'admin'), getbookings);
 router.route('/complete-booking').post(userAuth, completeBooking);
 
 // Simplified discount API using the new userAuth middleware!
