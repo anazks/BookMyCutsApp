@@ -291,7 +291,7 @@ const addService = asyncHandler(async (req, res) => {
 
     try {
         const decoded = jwt.verify(token, secretkey);
-        data.shoperId = decoded.id;
+        data.shoperId = decoded.id; 
 
         const addedService = await addServices(data);
         if (addedService) {
@@ -1555,6 +1555,14 @@ const fetchBookingsByShop = async (req, res) => {
                     startOfRange = new Date(now);
                     startOfRange.setHours(0, 0, 0, 0);
                     endOfRange = new Date(now);
+                    endOfRange.setHours(23, 59, 59, 999);
+                }
+                else if (period === 'yesterday') {
+                    startOfRange = new Date(now);
+                    startOfRange.setDate(now.getDate() - 1);
+                    startOfRange.setHours(0, 0, 0, 0);
+                    endOfRange = new Date(now);
+                    endOfRange.setDate(now.getDate() - 1);
                     endOfRange.setHours(23, 59, 59, 999);
                 }
                 else if (period === 'lastWeek') {

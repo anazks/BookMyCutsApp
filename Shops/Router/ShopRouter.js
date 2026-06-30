@@ -41,10 +41,10 @@ router.route('/shop/:id').get(getShop)
 // router.route('/viewMyShop').get(viewMyShop) // Assuming this is a function
 // router.route('/viewMyShop').get(myShopProfile)
 // --- SHOP OWNER SERVICE APIs ---
-router.route('/addService').post(shopAuth, addService)
+router.route('/addService').post([verifyToken, authorizeRoles('shop','admin')], addService)
 router.route('/viewMyService').get(shopAuth, viewMyService)
-router.route('/editService/:id').put(shopAuth, editService)
-router.route('/deleteService/:id').delete(shopAuth, deleteService)
+router.route('/editService/:id').put([verifyToken, authorizeRoles('shop','admin')], editService)
+router.route('/deleteService/:id').delete([verifyToken, authorizeRoles('shop','admin')], deleteService)
 
 // --- PUBLIC SERVICE APIs ---
 router.route('/ViewAllServices').get(ViewAllServices)
@@ -53,10 +53,10 @@ router.route('/viewSingleShopService/:id').get(viewSingleShopService)
 router.route('/viewSingleShopBarbers/:id').get(viewSingleShopBarbers)
 
 // --- SHOP OWNER BARBER APIs ---
-router.route('/addBarber').post(shopAuth, addBarber)
-router.route('/viewMyBarbers').get(shopAuth, viewMyBarbers)
-router.route('/updateBarber/:id').put(shopAuth, updateBarber)
-router.route('/deleteBarber/:id/:shopId').delete(shopAuth, deleteBarber)
+router.route('/addBarber').post([verifyToken, authorizeRoles('shop','admin')], addBarber)
+router.route('/viewMyBarbers').get([verifyToken, authorizeRoles('shop','admin')], viewMyBarbers)
+router.route('/updateBarber/:id').put([verifyToken, authorizeRoles('shop','admin')], updateBarber)
+router.route('/deleteBarber/:id/:shopId').delete([verifyToken, authorizeRoles('shop','admin')], deleteBarber)
 
 // --- PUBLIC BARBER APIs ---
 router.route('/ViewAllBarbers').get(ViewAllBarbers)

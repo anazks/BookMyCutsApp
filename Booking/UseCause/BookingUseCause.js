@@ -568,12 +568,14 @@ module.exports.getShopAvailableSlots = async (shopId, bookingDate) => {
     // ---- Convert booking times to minutes since midnight (in IST) ----
     const bookingSlots = bookings.map(booking => {
       // timeSlot.startingTime and endingTime are stored as UTC Date objects
-      const startLocal = new Date(booking.timeSlot.startingTime);
-      const endLocal = new Date(booking.timeSlot.endingTime);
+      const startIST = toISTHHMM(booking.timeSlot.startingTime);
+      const endIST = toISTHHMM(booking.timeSlot.endingTime);
 
-      // Convert to IST minutes
-      const startMin = startLocal.getUTCHours() * 60 + startLocal.getUTCMinutes();
-      const endMin = endLocal.getUTCHours() * 60 + endLocal.getUTCMinutes();
+      const [sh, sm] = startIST.split(":").map(Number);
+      const [eh, em] = endIST.split(":").map(Number);
+
+      const startMin = sh * 60 + sm;
+      const endMin = eh * 60 + em;
 
       return { startMin, endMin };
     });

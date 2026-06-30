@@ -29,8 +29,10 @@ const transactionLogSchema = new mongoose.Schema({
       'VERIFICATION_ATTEMPT',
       'VERIFICATION_SUCCESS',
       'VERIFICATION_FAILED',
+      'VERIFICATION_FAILED',
       'WEBHOOK_RECEIVED',
-      'WEBHOOK_FAILED_EVENT'
+      'WEBHOOK_FAILED_EVENT',
+      'RESCHEDULE_DECLINED_REFUND'
     ],
     required: true
   },

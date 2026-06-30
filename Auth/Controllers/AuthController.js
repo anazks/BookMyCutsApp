@@ -30,39 +30,23 @@ const userRegistration = asyncHandler(async (req, res) => {
 const userLogin = asyncHandler(async (req, res) => {
   try {
     const result = await loginuserUsecause(req.body);
-
-    if (result) {
+    if (result.success) {
       return res.status(200).json({
         success: true,
-        message: result.message || "Login successful",
+        message: "Login successful",
         accessToken: result.accessToken,
         refreshToken: result.refreshToken,
         user: result.user
       });
-    } if (result === 0) {
-      res.json({
-        success: false,
-        message: "authentication failed"
-
-      })
-    } else {
-
-    } {
-      res.status(401).json({
-        success: false,
-        message: result.message || "Authentication failed"
-      });
     }
-
-
-
+    // Authentication failure
+    return res.status(401).json({
+      success: false,
+      message: result.message || "Authentication failed"
+    });
   } catch (error) {
     console.error("userLogin controller error:", error);
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error",
-      // error: error.message   // ← uncomment only during development
-    });
+    return res.status(500).json({ success: false, message: "Internal server error" });
   }
 });
 
@@ -268,8 +252,8 @@ const sendForgotPasswordOtp = async (email, otp, expiryMinutes = 5) => {
     const transporter = nodemailer.createTransport({
       service: 'gmail',
       auth: {
-        user: 'anazksunil2@gmail.com',
-        pass: 'gefdcystfetieztk' // replace with your Gmail App Password (no spaces)
+        user: PROCESS.ENV.EMAIL, // use environment variable for email
+        pass: PROCESS.ENV.EMAIL_PASS // replace with your Gmail App Password (no spaces)
       }
     });
 

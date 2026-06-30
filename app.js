@@ -1,12 +1,14 @@
 const express = require('express');
 const app = express();
 const dotenv = require('dotenv')
+dotenv.config()
 const cors = require('cors')
 const compression = require('compression')
-dotenv.config()
+const bcrypt = require('bcryptjs')
 const connectToDatabase = require('./Config/DbConfig')
 const mongoose = require('mongoose');
 const User = require('./Auth/Model/UserModel')
+const AdminModel = require('./Auth/Model/AdminModel')
 const cron = require('node-cron')
 // const redisClient = require('./Config/redis')
 
@@ -36,8 +38,6 @@ const PayoutRequest = require('./Shops/Model/PayoutRequest');
 const Booking = require('./Booking/Models/BookingModel');
 
 // Define a route for the root URL
-connectToDatabase();
-
 app.get('/', (req, res) => {
   res.send('Hello, this is your Express server!');
 });
@@ -121,33 +121,58 @@ console.log("Cron job scheduled successfully - will run every 10 minutes");
 
 app.set('trust proxy', true);
 
-app.get('/', (req, res) => {
-    res.send('Hello from Node.js behind NGINX!');
-});
+const ensureAdminUser = async () => {
+  const adminUserName = process.env.ADMIN_USERNAME;
+  const adminPassword = process.env.ADMIN_PASSWORD;
 
-// Start the server
-app.listen(port, () => {
-  console.log(`Server is running at http://localhost:${port}`);
-  setupSwagger(app);
+  if (!adminUserName || !adminPassword) {
+    console.warn('ADMIN_USERNAME or ADMIN_PASSWORD is not set. Skipping admin seed.');
+    return;
+  }
 
-  // --- TEMPORARY CLEANUP ROUTE ---
-  app.post('/api/debug/clear-payouts', async (req, res) => {
-    try {
-      const pResult = await PayoutRequest.deleteMany({});
-      const bResult = await Booking.updateMany({}, { $set: { payoutStatus: 'pending' } });
-      res.json({
-        message: "Data cleared successfully",
-        payoutsDeleted: pResult.deletedCount,
-        bookingsReset: bResult.modifiedCount
-      });
-    } catch (err) {
-      res.status(500).json({ error: err.message });
-    }
+  const existingAdmin = await AdminModel.findOne({ userName: adminUserName });
+  if (existingAdmin) {
+    console.log(`Admin user "${adminUserName}" already exists. Skipping creation.`);
+    return;
+  }
+
+  const hashedPassword = await bcrypt.hash(adminPassword, 10);
+  await AdminModel.create({ userName: adminUserName, password: hashedPassword });
+  console.log(`Created admin user "${adminUserName}" from environment configuration.`);
+};
+
+const startApp = async () => {
+  await connectToDatabase();
+  await ensureAdminUser();
+
+  app.listen(port, () => {
+    console.log(`Server is running at http://localhost:${port}`);
+    setupSwagger(app);
+
+    // --- TEMPORARY CLEANUP ROUTE ---
+    app.post('/api/debug/clear-payouts', async (req, res) => {
+      try {
+        const pResult = await PayoutRequest.deleteMany({});
+        const bResult = await Booking.updateMany({}, { $set: { payoutStatus: 'pending' } });
+        res.json({
+          message: "Data cleared successfully",
+          payoutsDeleted: pResult.deletedCount,
+          bookingsReset: bResult.modifiedCount
+        });
+      } catch (err) {
+        res.status(500).json({ error: err.message });
+      }
+    });
+
+    // Optional: Run the check once immediately when server starts
+    console.log("Running initial premium check...");
+    checkExpiredPremium().catch(error => {
+      console.error("Error in initial premium check:", error);
+    });
   });
+};
 
-  // Optional: Run the check once immediately when server starts
-  console.log("Running initial premium check...");
-  checkExpiredPremium().catch(error => {
-    console.error("Error in initial premium check:", error);
-  });
+startApp().catch(error => {
+  console.error('Failed to start application:', error);
+  process.exit(1);
 });

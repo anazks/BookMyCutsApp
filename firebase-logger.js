@@ -2,13 +2,13 @@ const admin = require('firebase-admin');
 const { Tail } = require('tail');
 
 // Load the Service Account Key you provided
-const serviceAccount = require('./bookmycuts-3662f-firebase-adminsdk-fbsvc-8701fb5a53.json');
+const serviceAccount = require('./bookmycuts-b8e1d-firebase-adminsdk-fbsvc-dd91b48126.json');
 
 // Initialize Firebase Admin
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
   // The specific Realtime DB URL for your Singapore (asia-southeast1) database
-  databaseURL: "https://bookmycuts-3662f-default-rtdb.asia-southeast1.firebasedatabase.app" 
+  databaseURL: "https://bookmycuts-b8e1d-default-rtdb.asia-southeast1.firebasedatabase.app" 
 });
 
 // Reference the live_server_logs node in Realtime DB

@@ -117,14 +117,13 @@ module.exports.loginuserUsecause = async (data) => {
       };
     }
 
-    // Safety check: prevent bcrypt crash if password field is missing/corrupted
-    if (!user.password || typeof user.password !== 'string' || !user.password.startsWith('$2')) {
-      console.error(`Invalid or missing password hash for user: ${email}`);
-      return {
-        success: false,
-        message: "Invalid account credentials"
-      };
+    // Directly compare password; if missing, treat as invalid credentials
+    if (!user.password) {
+      console.error(`Password not set for user: ${email}`);
+      return { success: false, message: "Invalid account credentials" };
     }
+    // No need for hash format check; bcrypt.compare will fail if not a valid hash
+
 
     let isMatch;
     try {
@@ -351,7 +350,7 @@ module.exports.verifyOtpFunction = async (otp, mobileNo, role) => {
 
 
 // This is your Web Client ID from Google Cloud Console
-const GOOGLE_CLIENT_ID = "805182446508-gvphqj7e7kigpreinncsi480u4dficea.apps.googleusercontent.com";
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_SIGNIN_WEB_CLIENT_ID 
 // const GOOGLE_CLIENT_ID =  "293758521018-en9762n993a249rik4r3snavhblsa7s7.apps.googleusercontent.com" // THIS ID IS USED FOR DEVELOPMEMT                    
 const client = new OAuth2Client(GOOGLE_CLIENT_ID);
 

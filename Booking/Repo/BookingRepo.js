@@ -101,7 +101,7 @@ module.exports.myBooking = async (userId, limit = 10, lastDate = null) => {
 };
 
 
-module.exports.findDashboardIncomeFunction = async (shopId) => {
+module.exports. findDashboardIncomeFunction = async (shopId) => {
   console.log('🔍 [DASHBOARD] Starting income calc for shopId:', shopId);
 
   if (!mongoose.Types.ObjectId.isValid(shopId)) {
@@ -152,14 +152,17 @@ module.exports.findDashboardIncomeFunction = async (shopId) => {
     const todayReceivedDocs = await BookingModel.find({
       ...baseQuery,
       bookingTimestamp: { $gte: startOfToday, $lte: endOfToday }
-    }).select('amountPaid bookingTimestamp bookingStatus').limit(5); // limit for log
+    }).select('amountPaid salonPayoutAmount bookingTimestamp bookingStatus');
 
     console.log('📄 [DASHBOARD] Today received docs count:', todayReceivedDocs.length);
-    todayReceivedDocs.forEach((doc, i) => {
-      console.log(`  → Doc ${i}: amountPaid=${doc.amountPaid}, timestamp=${doc.bookingTimestamp}, status=${doc.bookingStatus}`);
+    todayReceivedDocs.slice(0, 5).forEach((doc, i) => {
+      console.log(`  → Doc ${i}: amountPaid=${doc.amountPaid}, salonPayoutAmount=${doc.salonPayoutAmount}, timestamp=${doc.bookingTimestamp}, status=${doc.bookingStatus}`);
     });
 
-    const todayReceived = todayReceivedDocs.reduce((sum, doc) => sum + (doc.amountPaid || 0), 0);
+    const todayReceived = todayReceivedDocs.reduce((sum, doc) => {
+      const payout = doc.salonPayoutAmount !== undefined ? doc.salonPayoutAmount : Math.max((doc.amountPaid || 0) - 15, 0);
+      return sum + payout;
+    }, 0);
 
     // 2. Today expected remaining
     console.log('🔎 [DASHBOARD] Querying today expected...');
@@ -167,10 +170,10 @@ module.exports.findDashboardIncomeFunction = async (shopId) => {
       ...baseQuery,
       bookingDate: { $gte: startOfToday, $lte: endOfToday },
       remainingAmount: { $gt: 0 }
-    }).select('remainingAmount bookingDate bookingStatus').limit(5);
+    }).select('remainingAmount bookingDate bookingStatus');
 
     console.log('📄 [DASHBOARD] Today expected docs count:', todayExpectedDocs.length);
-    todayExpectedDocs.forEach((doc, i) => {
+    todayExpectedDocs.slice(0, 5).forEach((doc, i) => {
       console.log(`  → Doc ${i}: remaining=${doc.remainingAmount}, bookingDate=${doc.bookingDate}, status=${doc.bookingStatus}`);
     });
 
@@ -181,20 +184,26 @@ module.exports.findDashboardIncomeFunction = async (shopId) => {
     const last7DaysDocs = await BookingModel.find({
       ...baseQuery,
       bookingTimestamp: { $gte: startOfLast7Days, $lte: endOfToday }
-    }).select('amountPaid').limit(5);
+    }).select('amountPaid salonPayoutAmount');
 
     console.log('📄 [DASHBOARD] Last 7 days docs count:', last7DaysDocs.length);
-    const last7Days = last7DaysDocs.reduce((sum, doc) => sum + (doc.amountPaid || 0), 0);
+    const last7Days = last7DaysDocs.reduce((sum, doc) => {
+      const payout = doc.salonPayoutAmount !== undefined ? doc.salonPayoutAmount : Math.max((doc.amountPaid || 0) - 15, 0);
+      return sum + payout;
+    }, 0);
 
     // 4. This month
     console.log('🔎 [DASHBOARD] Querying this month...');
     const thisMonthDocs = await BookingModel.find({
       ...baseQuery,
       bookingTimestamp: { $gte: startOfMonth }
-    }).select('amountPaid').limit(5);
+    }).select('amountPaid salonPayoutAmount');
 
     console.log('📄 [DASHBOARD] This month docs count:', thisMonthDocs.length);
-    const thisMonthReceived = thisMonthDocs.reduce((sum, doc) => sum + (doc.amountPaid || 0), 0);
+    const thisMonthReceived = thisMonthDocs.reduce((sum, doc) => {
+      const payout = doc.salonPayoutAmount !== undefined ? doc.salonPayoutAmount : Math.max((doc.amountPaid || 0) - 15, 0);
+      return sum + payout;
+    }, 0);
 
     const result = {
       last7Days: Math.round(last7Days),

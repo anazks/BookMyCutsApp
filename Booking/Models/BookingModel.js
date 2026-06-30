@@ -94,6 +94,22 @@ const bookingSchema = new mongoose.Schema({
     enum: ['unpaid', 'partial', 'paid', 'refunded','failed'],
     default: 'unpaid'
   },
+  paymentFee: {
+    type: Number,
+    default: 0
+  },
+  suggestedTime: {
+    type: Date
+  },
+  rescheduleReason: {
+    type: String,
+    default: ''
+  },
+  rescheduleStatus: {
+    type: String,
+    enum: ['none','suggested','accepted','declined'],
+    default: 'none'
+  },
   amountPaid: {
     type: Number,
     default: 0

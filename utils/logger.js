@@ -3,11 +3,11 @@ const admin = require('firebase-admin');
 const path = require('path');
 
 if (!admin.apps.length) {
-  const keyPath = path.join(__dirname, '..', 'bookmycuts-3662f-firebase-adminsdk-fbsvc-8701fb5a53.json');
+  const keyPath = path.join(__dirname, '..', 'bookmycuts-b8e1d-firebase-adminsdk-fbsvc-dd91b48126.json');
   const serviceAccount = require(keyPath);
   admin.initializeApp({
     credential: admin.credential.cert(serviceAccount),
-    databaseURL: "https://bookmycuts-3662f-default-rtdb.asia-southeast1.firebasedatabase.app"
+    databaseURL: "https://bookmycuts-b8e1d-default-rtdb.asia-southeast1.firebasedatabase.app"
   });
 }
 

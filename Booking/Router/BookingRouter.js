@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 
-const {razorpayWebhook, completeBooking, checkAvailability, AddBooking,createOrder,getMybooking,findDashboardIncome,verifyPayment,barberFreeSlots,fetchAllAvailableTimeSlots,fetchUpComeingBooking,fetchAllbookings, getbookings} = require('../Controler/BookingController');
+const {razorpayWebhook, completeBooking, checkAvailability, AddBooking,createOrder,getMybooking,findDashboardIncome,verifyPayment,barberFreeSlots,fetchAllAvailableTimeSlots,fetchUpComeingBooking,fetchAllbookings, getbookings, suggestReschedule, respondReschedule} = require('../Controler/BookingController');
 const { verifyToken, authorizeRoles } = require('../../Middlewares/AuthMiddleWares/AuthMiddleWare');
 const UserModel = require('../../Auth/Model/UserModel');
 
@@ -16,6 +16,8 @@ router.route('/webhook/razorpay').post(razorpayWebhook);
 
 // --- SHOP APIs ---
 router.route('/dashboardIncome').get(shopAuth, findDashboardIncome);
+router.route('/suggestReschedule').post(shopAuth, suggestReschedule);
+router.route('/respondReschedule').post(userAuth, respondReschedule);
 
 // --- USER APIs ---
 router.route('/getAvilablity/:barberId').get(userAuth, checkAvailability);
@@ -23,7 +25,7 @@ router.route('/BookNow').post(userAuth, AddBooking);
 router.route('/myBookings').post(userAuth, getMybooking);
 router.route('/create-order').post(userAuth, createOrder);
 router.route('/verifyPayment').post(userAuth, verifyPayment);
-router.route('/getBarberFreeTime').post(userAuth, barberFreeSlots);
+router.route('/getBarberFreeTime').post(verifyToken, authorizeRoles('user', 'shop'), barberFreeSlots);
 router.route('/fetchAllAvailableTimeSlots').post(userAuth, fetchAllAvailableTimeSlots);
 router.route('/fetchUpComingBooking/:id').get(userAuth, fetchUpComeingBooking);
 router.route('/bookings').get(verifyToken, authorizeRoles('user', 'admin'), fetchAllbookings);

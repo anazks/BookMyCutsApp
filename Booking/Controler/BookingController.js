@@ -6,7 +6,7 @@ const { myBooking, findDashboardIncomeFunction, upcomingBooking, fetchbookingByI
 const payoutQueue = require('./PayoutQueue');
 const RazorPay = require('../../Razorpay/RazorpayConfig')
 const mongoose = require('mongoose');
-const { trace } = require('../Router/BookingRouter');
+const { trace } = require('../Router/BookingRouter'); 
 const crypto = require('crypto'); // CommonJS
 const RazorpayClass = require('razorpay'); // Import the class for static methods
 const BookingModel = require('../Models/BookingModel');
@@ -14,6 +14,9 @@ const TransactionLog = require('../Models/TransactionLogModel');
 const ShopModel = require('../../Shops/Model/ShopModel')
 const PayoutRequest = require('../../Shops/Model/PayoutRequest');
 const Offer = require('../../Offers/Model/Offer');
+const UserModel = require('../../Auth/Model/UserModel');
+const Notification = require('../../Auth/Model/Notification');
+const { sendAndSaveNotification } = require('../../utils/notificationHelper');
 
 
 
@@ -413,6 +416,205 @@ const verifyPayment = async (req, res) => {
   }
 };
 
+// ------------------------------------------------------------
+//  Suggest a reschedule (shop owner)
+// ------------------------------------------------------------
+const suggestReschedule = async (req, res) => {
+  try {
+    const { bookingId, suggestedTime, reason } = req.body;
+    const shopOwnerId = req.userId; // assume shopAuth middleware sets req.userId
+
+    const booking = await BookingModel.findById(bookingId).populate('shopId');
+    if (!booking) {
+      return res.status(404).json({ success: false, message: 'Booking not found' });
+    }
+    // Only allow if booking is confirmed and belongs to this shop
+    if (booking.shopOwnerId?.toString() !== shopOwnerId) {
+      return res.status(403).json({ success: false, message: 'Not authorized for this booking' });
+    }
+    if (booking.bookingStatus !== 'confirmed') {
+      return res.status(400).json({ success: false, message: 'Can only reschedule a confirmed booking' });
+    }
+    if (booking.rescheduleStatus === 'suggested' || booking.rescheduleStatus === 'accepted') {
+      return res.status(400).json({ success: false, message: 'Cannot reschedule a booking that is already pending reschedule or has been rescheduled' });
+    }
+
+    booking.suggestedTime = new Date(suggestedTime);
+    booking.rescheduleReason = reason || '';
+    booking.rescheduleStatus = 'suggested';
+    await booking.save();
+
+    // Notify client with approval/decline actions (Expo push with categoryId)
+    const client = await UserModel.findById(booking.userId);
+    if (client?.PushToken) {
+      const shopName = booking.shopId?.shopName || booking.shopId?.name || 'The Shop';
+      
+      let originalTimeStr = 'your original time';
+      if (booking.timeSlot?.startingTime) {
+        originalTimeStr = new Date(booking.timeSlot.startingTime).toLocaleString('en-IN', {
+          day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit'
+        });
+      }
+      
+      const suggestedTimeStr = new Date(suggestedTime).toLocaleString('en-IN', {
+        day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit'
+      });
+
+      await sendAndSaveNotification({
+        recipientId: client._id,
+        accountType: 'User',
+        pushToken: client.PushToken,
+        title: `Reschedule from ${shopName}`,
+        body: `${shopName} wants to change your ${originalTimeStr} booking to ${suggestedTimeStr}.\nReason: ${reason}`,
+        type: 'reschedule_proposal',
+        data: { bookingId: booking._id.toString() },
+        categoryId: 'RESCHEDULE_RESPONSE' // interactive buttons defined on client
+      });
+    }
+
+    return res.status(200).json({ success: true, message: 'Reschedule suggestion sent' });
+  } catch (err) {
+    console.error('suggestReschedule error:', err);
+    return res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// ------------------------------------------------------------
+//  Respond to reschedule (client)
+// ------------------------------------------------------------
+const respondReschedule = async (req, res) => {
+  try {
+    const { bookingId, notificationId, action } = req.body; // action = 'accept' | 'decline'
+    const clientId = req.userId; // user auth
+
+    const booking = await BookingModel.findById(bookingId);
+    if (!booking) {
+      return res.status(404).json({ success: false, message: 'Booking not found' });
+    }
+    if (booking.userId?.toString() !== clientId) {
+      return res.status(403).json({ success: false, message: 'Not authorized' });
+    }
+    if (booking.rescheduleStatus !== 'suggested') {
+      // The booking was already accepted/declined/cancelled.
+      // Clean up the stale notification so the user doesn't get stuck.
+      if (notificationId) {
+        await Notification.findByIdAndUpdate(notificationId, { type: 'reschedule_proposal_actioned' });
+      }
+      return res.status(400).json({ success: false, message: 'This reschedule suggestion has already been responded to or is no longer active. Please refresh your notifications.' });
+    }
+
+    if (action === 'accept') {
+      // Assuming same duration as original
+      const durationMs = new Date(booking.timeSlot.endingTime).getTime() - new Date(booking.timeSlot.startingTime).getTime();
+      
+      // Update time slot & status
+      booking.timeSlot.startingTime = booking.suggestedTime;
+      booking.timeSlot.endingTime = new Date(new Date(booking.suggestedTime).getTime() + durationMs);
+      booking.rescheduleStatus = 'accepted';
+      booking.suggestedTime = undefined;
+      booking.rescheduleReason = undefined;
+      await booking.save();
+
+      // Notify shop owner
+      const shopOwner = await ShopModel.findById(booking.shopOwnerId);
+      if (shopOwner?.PushToken) {
+        await sendAndSaveNotification({
+          recipientId: shopOwner._id,
+          accountType: 'shop',
+          pushToken: shopOwner.PushToken,
+          title: 'Reschedule Accepted',
+          body: 'Customer accepted the new time.',
+          type: 'reschedule_accepted',
+          data: { bookingId: booking._id.toString() }
+        });
+      }
+
+      // Mark notification as actioned
+      if (notificationId) {
+        await Notification.findByIdAndUpdate(notificationId, { type: 'reschedule_proposal_actioned' });
+      }
+
+      return res.status(200).json({ success: true, message: 'Reschedule accepted' });
+    }
+
+    if (action === 'decline') {
+      // Process refund if payment was made
+      let refundSuccess = false;
+      if (booking.paymentStatus === 'paid' || booking.paymentStatus === 'partial') {
+        if (booking.paymentId && booking.paymentId !== 'not added') {
+          try {
+            const refundAmountPaise = Math.round(booking.amountPaid * 100);
+            const refund = await RazorPay.payments.refund(booking.paymentId, {
+              amount: refundAmountPaise,
+              speed: 'normal', // Changed from 'optimum' to 'normal' to allow refunds from unsettled funds
+              notes: { bookingId: booking._id.toString(), reason: 'Reschedule declined by client' }
+            });
+            console.log('✅ Refund processed', refund.id);
+            booking.paymentStatus = 'refunded';
+            await TransactionLog.create({
+              bookingId: booking._id,
+              razorpayPaymentId: booking.paymentId,
+              amount: booking.amountPaid,
+              stage: 'RESCHEDULE_DECLINED_REFUND',
+              status: 'SUCCESS',
+              responsePayload: refund
+            });
+            refundSuccess = true;
+          } catch (refundErr) {
+            console.error('Refund error:', refundErr);
+            await TransactionLog.create({
+              bookingId: booking._id,
+              razorpayPaymentId: booking.paymentId,
+              amount: booking.amountPaid,
+              stage: 'RESCHEDULE_DECLINED_REFUND',
+              status: 'FAILED',
+              errorMessage: refundErr.message
+            });
+            return res.status(500).json({ success: false, message: 'Refund failed', error: refundErr.message });
+          }
+        }
+      }
+      // Cancel booking
+      booking.bookingStatus = 'cancelled';
+      booking.rescheduleStatus = 'declined';
+      booking.suggestedTime = undefined;
+      booking.rescheduleReason = undefined;
+      await booking.save();
+
+      // Notify shop owner about cancellation
+      const shopOwner = await ShopModel.findById(booking.shopOwnerId);
+      if (shopOwner?.PushToken) {
+        await sendAndSaveNotification({
+          recipientId: shopOwner._id,
+          accountType: 'shop',
+          pushToken: shopOwner.PushToken,
+          title: 'Booking Cancelled',
+          body: `Customer declined the new time. ${refundSuccess ? 'Payment refunded.' : ''}`,
+          type: 'reschedule_declined',
+          data: { bookingId: booking._id.toString() }
+        });
+      }
+
+      // Mark notification as actioned
+      if (notificationId) {
+        await Notification.findByIdAndUpdate(notificationId, { type: 'reschedule_proposal_actioned' });
+      }
+
+      return res.status(200).json({ success: true, message: 'Booking cancelled and refund processed' });
+    }
+
+    return res.status(400).json({ success: false, message: 'Invalid action' });
+  } catch (err) {
+    console.error('respondReschedule error:', err);
+    return res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// Export new handlers
+module.exports.suggestReschedule = suggestReschedule;
+module.exports.respondReschedule = respondReschedule;
+
+
 
 
 
@@ -634,6 +836,7 @@ const findShopByService = async (req, res) => {
 
 const sendConfirmationMail = async (bookingId, email) => {
   try {
+    console.log("🚨 STOP HERE: The email variable contains ->", email);
     const booking = await BookingModel.findById(bookingId);
     console.log(email, 'Booking details for email');
     if (!booking) {
@@ -647,13 +850,13 @@ const sendConfirmationMail = async (bookingId, email) => {
     const transporter = nodemailer.createTransport({
       service: 'gmail',
       auth: {
-        user: 'anazksunil2@gmail.com',
-        pass: 'gefd cyst feti eztk' // app password (no spaces)
+        user: 'PROCESS.ENV.EMAIL', // use environment variable for email
+        pass: 'PROCESS.ENV.EMAIL_PASS' // use environment variable for email password (no spaces)
       }
     });
 
     const mailOptions = {
-      from: '"BookMyCuts" <anazksunil2@gmail.com>',
+      from: '"BookMyCuts" <bookmycuts99@gmail.com>',
       to: email,
       subject: 'Booking Confirmation – BookMyCuts',
       html: `
@@ -737,7 +940,7 @@ const fetchAllbookings = async (req, res) => {
       filter.bookingDate = { $gte: start, $lte: end };
     }
 
-    // 3️⃣ Quick filters (today / lastWeek / lastMonth)
+    // 3️⃣ Quick filters (today / yesterday / lastWeek / lastMonth)
     else if (period) {
       const now = new Date();
       let start, end;
@@ -747,6 +950,16 @@ const fetchAllbookings = async (req, res) => {
         start.setHours(0, 0, 0, 0);
 
         end = new Date();
+        end.setHours(23, 59, 59, 999);
+      }
+
+      if (period === "yesterday") {
+        start = new Date();
+        start.setDate(start.getDate() - 1);
+        start.setHours(0, 0, 0, 0);
+
+        end = new Date();
+        end.setDate(end.getDate() - 1);
         end.setHours(23, 59, 59, 999);
       }
 
@@ -958,4 +1171,4 @@ const razorpayWebhook = async (req, res) => {
   }
 };
 
-module.exports = { razorpayWebhook, completeBooking, getbookings, findShopByService, fetchUpComeingBooking, checkAvailability, AddBooking, getMybooking, createOrder, findDashboardIncome, verifyPayment, barberFreeSlots, fetchAllAvailableTimeSlots, fetchAllbookings }
+module.exports = { razorpayWebhook, completeBooking, getbookings, findShopByService, fetchUpComeingBooking, checkAvailability, AddBooking, getMybooking, createOrder, findDashboardIncome, verifyPayment, barberFreeSlots, fetchAllAvailableTimeSlots, fetchAllbookings, suggestReschedule, respondReschedule }
