@@ -351,7 +351,7 @@ module.exports.verifyOtpFunction = async (otp, mobileNo, role) => {
 
 
 // This is your Web Client ID from Google Cloud Console
-const GOOGLE_CLIENT_ID = "805182446508-gvphqj7e7kigpreinncsi480u4dficea.apps.googleusercontent.com";
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || "402343626155-7pj93jpsu7li90fc66908itr9nm99t0d.apps.googleusercontent.com";
 // const GOOGLE_CLIENT_ID =  "293758521018-en9762n993a249rik4r3snavhblsa7s7.apps.googleusercontent.com" // THIS ID IS USED FOR DEVELOPMEMT                    
 const client = new OAuth2Client(GOOGLE_CLIENT_ID);
 

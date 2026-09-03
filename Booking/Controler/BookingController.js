@@ -379,10 +379,10 @@ const verifyPayment = async (req, res) => {
     // }
     // --- TRIGGER QUEUE END ---
 
-    // Send confirmation email asynchronously
-    sendConfirmationMail(bookingId, email)
-      .then(() => console.log('Email sent'))
-      .catch(err => console.error('Email error:', err));
+    // Send confirmation email asynchronously (DISABLED to prevent Gmail account suspension)
+    // sendConfirmationMail(bookingId, email)
+    //   .then(() => console.log('Email sent'))
+    //   .catch(err => console.error('Email error:', err));
 
     // try {
     //   await payoutQueue.add('initiatePayout', {
@@ -633,6 +633,8 @@ const findShopByService = async (req, res) => {
 
 
 const sendConfirmationMail = async (bookingId, email) => {
+  // Email booking details disabled to prevent Gmail account suspension
+  /*
   try {
     const booking = await BookingModel.findById(bookingId);
     console.log(email, 'Booking details for email');
@@ -680,6 +682,7 @@ const sendConfirmationMail = async (bookingId, email) => {
   } catch (error) {
     console.error('❌ Error sending confirmation email:', error.message);
   }
+  */
 };
 
 // bookingController.js

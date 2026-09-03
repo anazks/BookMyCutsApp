@@ -3,11 +3,11 @@ const admin = require('firebase-admin');
 const path = require('path');
 
 if (!admin.apps.length) {
-  const keyPath = path.join(__dirname, '..', 'bookmycuts-3662f-firebase-adminsdk-fbsvc-8701fb5a53.json');
+  const keyPath = path.join(__dirname, '..', 'bookmycuts-185db-firebase-adminsdk-fbsvc-06f37dba04.json');
   const serviceAccount = require(keyPath);
   admin.initializeApp({
     credential: admin.credential.cert(serviceAccount),
-    databaseURL: "https://bookmycuts-3662f-default-rtdb.asia-southeast1.firebasedatabase.app"
+    databaseURL: "https://bookmycuts-185db-default-rtdb.asia-southeast1.firebasedatabase.app"
   });
 }
 
@@ -16,7 +16,7 @@ const db = admin.database();
 // Helper function to deep-clean objects for Firebase (removes $ and . from keys)
 function cleanObject(obj) {
   if (obj === null || typeof obj !== 'object') return obj;
-  
+
   // Handle Mongoose documents specifically
   if (obj.toObject && typeof obj.toObject === 'function') {
     obj = obj.toObject();
