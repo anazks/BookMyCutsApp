@@ -1,7 +1,6 @@
 const UserModel = require("../Model/UserModel")
 const shoperModel = require('../Model/ShoperModel')
 const asyncHandler = require("express-async-handler");
-const { userLogin } = require("../Controllers/AuthController");
 const otpModel = require("../Model/OtpModel");
 const ShoperModel = require("../Model/ShoperModel");
 const ShopModel = require("../../Shops/Model/ShopModel");

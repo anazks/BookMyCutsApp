@@ -639,11 +639,12 @@ const userGoogleSignin = async (req, res) => {
       })
     }
   } catch (error) {
-    console.log(error)
+    console.error("userGoogleSignin Error Details:", error);
     res.status(500).json({
       success: false,
-      message: "interval server error"
-    })
+      message: error.message || "interval server error",
+      error: error.message
+    });
   }
 }
 

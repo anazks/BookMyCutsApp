@@ -364,19 +364,28 @@ module.exports.verifyGoogleIdToken = async (data) => {
       throw new Error('idToken is required');
     }
 
-    // 1️⃣ Verify Google token using the CONSTANT variable
+    // 1️⃣ Verify Google token using allowed audiences
     const ticket = await client.verifyIdToken({
       idToken,
-      audience: GOOGLE_CLIENT_ID, // Use the constant here to avoid "Wrong recipient" error
+      audience: [
+        GOOGLE_CLIENT_ID,
+        "402343626155-v2p0s3obo94oucpugnha6rpgf7fn28b0.apps.googleusercontent.com",
+        "402343626155-vrrdo7h8o32cjanl8hkhbddd866t4cq5h.apps.googleusercontent.com",
+      ],
     });
 
     const payload = ticket.getPayload();
+    console.log("Google Payload:", payload);
 
-    // 2️⃣ Common user data
+    // 2️⃣ Common user data (ensure firstName & lastName are present for Mongoose validation)
+    const nameParts = (payload.name || payload.email || 'User').trim().split(' ');
+    const firstName = payload.given_name || nameParts[0] || 'User';
+    const lastName = payload.family_name || (nameParts.length > 1 ? nameParts.slice(1).join(' ') : '.');
+
     const userData = {
-      email: payload.email,
-      firstName: payload.given_name,
-      lastName: payload.family_name,
+      email: (payload.email || '').toLowerCase(),
+      firstName,
+      lastName,
       googleId: payload.sub,
       authProvider: 'google',
     };
