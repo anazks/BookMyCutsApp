@@ -50,7 +50,7 @@ app.use(express.json({
 app.use(express.urlencoded({ extended: true }));
 
 // Define the port
-const port = 5000
+const port = process.env.PORT;
 
 app.use('/api/auth', authRouter)
 app.use('/api/shop', shopRouter)
